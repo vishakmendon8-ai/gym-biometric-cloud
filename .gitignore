@@ -26,3 +26,8 @@ dist-ssr
 .vercel
 serviceAccountKey.json
 .firebase/
+.env
+.env.*
+!.env.example
+adms-server/.env
+adms-server/data/

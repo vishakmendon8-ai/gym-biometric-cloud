@@ -46,7 +46,7 @@ export const TopNavbar: React.FC = () => {
     'plans': { title: 'Membership Plans', subtitle: 'Configure access packages & promotional pricing' },
     'subscriptions': { title: 'Subscriptions', subtitle: 'Track active memberships, renewals & expiries' },
     'payments': { title: 'Payments', subtitle: 'Razorpay billing transactions & revenue records' },
-    'biometric': { title: 'Biometric Management', subtitle: 'Enroll & manage 3-sample simulated fingerprints' },
+    'biometric': { title: 'Biometric Management', subtitle: 'Secureye device registry, Firebase sync & live diagnostics' },
     'access-monitor': { title: 'Live Access Monitoring', subtitle: 'Hardware entrance monitor & real-time verification' },
     'attendance': { title: 'Attendance', subtitle: 'Daily facility check-in logs & visitor history' },
     'reports': { title: 'Reports & Analytics', subtitle: 'Export revenue, membership & retention metrics' },

@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: adms_db
+      POSTGRES_USER: adms_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_this_strong_password}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adms_user -d adms_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adms-server:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://adms_user:${POSTGRES_PASSWORD:-change_this_strong_password}@postgres:5432/adms_db
+      ADMS_TIMEZONE: ${ADMS_TIMEZONE:-5.5}
+      DEVICE_ONLINE_THRESHOLD_SEC: ${DEVICE_ONLINE_THRESHOLD_SEC:-120}
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-gym001-50a97}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON:-}
+    ports:
+      # Expose plain HTTP port 8080 directly for biometric hardware (or put Nginx on port 80)
+      - "8080:8080"
+
+volumes:
+  pg_data:

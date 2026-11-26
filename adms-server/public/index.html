@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GymPro ADMS Biometric Live Monitor</title>
+  <style>
+    :root {
+      --bg: #f5f6f2;
+      --card: #ffffff;
+      --ink: #252a30;
+      --muted: #6c7680;
+      --border: #dce3e8;
+      --accent: #ffd447;
+      --ok: #36a875;
+      --err: #dc5555;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 24px;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; }
+    .header {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 16px; margin-bottom: 20px;
+      background: var(--ink); color: #fff; padding: 18px 22px; border-radius: 16px;
+    }
+    .header h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+    .header p { margin: 4px 0 0; font-size: 12px; color: #b7c0c8; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+      border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    }
+    .pill.online { background: rgba(54,168,117,.16); color: var(--ok); }
+    .pill.offline { background: rgba(220,85,85,.14); color: var(--err); }
+    .pill.info { background: rgba(255,212,71,.2); color: #ffd447; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+    .stat label { display: block; font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .stat strong { display: block; font-size: 22px; margin-top: 6px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 18px; margin-bottom: 20px;
+    }
+    .card-head {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .card-head h2 { margin: 0; font-size: 15px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    input, button {
+      font: inherit; font-size: 12px; padding: 7px 10px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--ink);
+    }
+    button {
+      background: var(--ink); color: var(--accent); border-color: var(--ink);
+      font-weight: 700; cursor: pointer;
+    }
+    button.secondary { background: #fff; color: var(--ink); border-color: var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eef2f5; }
+    th { font-size: 11px; text-transform: uppercase; color: var(--muted); background: #fafbfa; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .empty { text-align: center; padding: 26px; color: var(--muted); font-size: 12px; }
+    .overflow { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1>GymPro Secureye ADMS / iClock Live Monitor</h1>
+        <p>Direct HTTP Push Receiver &bull; Zero Local PC Required &bull; Auto-refreshes every 5 seconds</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span id="healthBadge" class="pill info"><span class="dot"></span>Checking Server...</span>
+        <button onclick="refreshAll()">Refresh Now</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="stat"><label>Database Engine</label><strong id="statDb">—</strong></div>
+      <div class="stat"><label>Online Devices</label><strong id="statOnline">0 / 0</strong></div>
+      <div class="stat"><label>Total Punches (Filtered)</label><strong id="statPunches">0</strong></div>
+      <div class="stat"><label>Firebase Firestore Sync</label><strong id="statFirebase">—</strong></div>
+    </div>
+
+    <!-- Registered Devices -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Connected Biometric Devices (Live Heartbeat Status)</h2>
+        <span class="mono" style="font-size:11px;color:var(--muted);">Updated automatically on /iclock/cdata &amp; /iclock/getrequest</span>
+      </div>
+      <div class="overflow">
+        <table>
+          <thead>
+            <tr>
+              <th>Serial Number</th>
+              <th>Name</th>
+              <th>Location</th>
+              <th>Device IP</th>
+              <th>Push Ver</th>
+              <th>Last Seen</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="devicesBody">
+            <tr><td colspan="7" class="empty">Waiting for biometric device handshake...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Live Attendance Punches -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Live Attendance Punches (GET /api/attendance)</h2>
+        <div class="filters">
+          <input type="date" id="filterFrom" title="From Date" />
+          <input type="date" id="filterTo" title="To Date" />
+          <input type="text" id="filterEmp" placeholder="Employee / Member ID" />
+          <input type="text" id="filterSn" placeholder="Device SN" />
+          <button onclick="loadAttendance()">Filter</button>
+          <button class="secondary" onclick="clearFilters()">Reset</button>
+        </div>
+      </div>
+      <div class="overflow">
+        <table>
+          <thead>
+            <tr>
+              <th>Punch Time</th>
+              <th>Device SN</th>
+              <th>Employee / User ID</th>
+              <th>Punch State</th>
+              <th>Verify Mode</th>
+              <th>Raw Line</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceBody">
+            <tr><td colspan="6" class="empty">No attendance punches recorded yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Raw ADMS Pairing Debug Log -->
+    <div class="card">
+      <div class="card-head">
+        <h2>Raw ADMS / iClock Debug Log (Initial Pairing Monitor)</h2>
+        <span class="mono" style="font-size:11px;color:var(--muted);">Latest 25 incoming HTTP hits to /iclock/*</span>
+      </div>
+      <div class="overflow">
+        <table>
+          <thead>
+            <tr>
+              <th>Received At</th>
+              <th>Method &amp; Path</th>
+              <th>SN</th>
+              <th>Remote IP</th>
+              <th>Content-Type</th>
+              <th>Raw Body</th>
+            </tr>
+          </thead>
+          <tbody id="rawLogsBody">
+            <tr><td colspan="6" class="empty">No raw ADMS requests received yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function fmtTime(iso) {
+      if (!iso) return 'Never';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? iso : d.toLocaleString();
+    }
+
+    async function loadHealth() {
+      try {
+        const r = await fetch('/health');
+        const d = await r.json();
+        document.getElementById('statDb').textContent = (d.database || 'unknown').toUpperCase();
+        document.getElementById('statOnline').textContent = `${d.onlineDevices} / ${d.registeredDevices}`;
+        document.getElementById('statFirebase').textContent = d.firebaseSyncEnabled ? 'ENABLED' : 'Local SQL Only';
+        const badge = document.getElementById('healthBadge');
+        badge.className = 'pill online';
+        badge.innerHTML = '<span class="dot"></span>ADMS Server Online';
+      } catch {
+        const badge = document.getElementById('healthBadge');
+        badge.className = 'pill offline';
+        badge.innerHTML = '<span class="dot"></span>Server Unreachable';
+      }
+    }
+
+    async function loadDevices() {
+      const r = await fetch('/api/devices');
+      const d = await r.json();
+      const tbody = document.getElementById('devicesBody');
+      if (!d.devices || d.devices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">No biometric machines have checked in yet. Configure your Secureye ADMS server IP &amp; port to begin.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.devices.map(dev => `
+        <tr>
+          <td class="mono"><strong>${esc(dev.serial_number)}</strong></td>
+          <td>${esc(dev.name)}</td>
+          <td>${esc(dev.location)}</td>
+          <td class="mono">${esc(dev.ip_address || '—')}</td>
+          <td class="mono">${esc(dev.push_version || '—')}</td>
+          <td class="mono">${esc(fmtTime(dev.last_seen_at))}</td>
+          <td><span class="pill ${dev.is_online ? 'online' : 'offline'}"><span class="dot"></span>${dev.is_online ? 'Online' : 'Offline'}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadAttendance() {
+      const params = new URLSearchParams();
+      const from = document.getElementById('filterFrom').value;
+      const to = document.getElementById('filterTo').value;
+      const emp = document.getElementById('filterEmp').value.trim();
+      const sn = document.getElementById('filterSn').value.trim();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      if (emp) params.set('employee_code', emp);
+      if (sn) params.set('device_sn', sn);
+      params.set('limit', '100');
+
+      const r = await fetch('/api/attendance?' + params.toString());
+      const d = await r.json();
+      document.getElementById('statPunches').textContent = String(d.total || 0);
+      const tbody = document.getElementById('attendanceBody');
+      if (!d.data || d.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No attendance records match the current filter.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.data.map(row => `
+        <tr>
+          <td class="mono"><strong>${esc(fmtTime(row.punch_time))}</strong></td>
+          <td class="mono">${esc(row.device_sn)}</td>
+          <td class="mono"><strong>${esc(row.employee_code)}</strong></td>
+          <td>${esc(row.punch_state_label)} (${esc(row.punch_state)})</td>
+          <td>${esc(row.verify_mode_label)} (${esc(row.verify_mode)})</td>
+          <td class="mono" style="color:var(--muted);">${esc(row.raw_payload)}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadRawLogs() {
+      const r = await fetch('/api/debug/raw?limit=25');
+      const d = await r.json();
+      const tbody = document.getElementById('rawLogsBody');
+      if (!d.logs || d.logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">No incoming /iclock/* requests logged yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = d.logs.map(log => `
+        <tr>
+          <td class="mono">${esc(fmtTime(log.received_at))}</td>
+          <td class="mono"><strong>${esc(log.method)}</strong> ${esc(log.path)}${log.query_string ? '?' + esc(log.query_string) : ''}</td>
+          <td class="mono">${esc(log.device_sn || '—')}</td>
+          <td class="mono">${esc(log.remote_ip || '—')}</td>
+          <td class="mono">${esc(log.content_type || 'none')}</td>
+          <td class="mono" style="max-width:340px;white-space:pre-wrap;word-break:break-all;">${esc(log.raw_body || '(empty)')}</td>
+        </tr>
+      `).join('');
+    }
+
+    function clearFilters() {
+      document.getElementById('filterFrom').value = '';
+      document.getElementById('filterTo').value = '';
+      document.getElementById('filterEmp').value = '';
+      document.getElementById('filterSn').value = '';
+      loadAttendance();
+    }
+
+    function refreshAll() {
+      loadHealth();
+      loadDevices();
+      loadAttendance();
+      loadRawLogs();
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 5000);
+  </script>
+</body>
+</html>

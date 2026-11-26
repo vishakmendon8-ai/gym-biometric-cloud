@@ -27,7 +27,7 @@ export const AdminSidebar: React.FC = () => {
     { id: 'plans', label: 'Membership Plans', icon: <Layers className="w-4 h-4" /> },
     { id: 'subscriptions', label: 'Subscriptions', icon: <CalendarCheck className="w-4 h-4" /> },
     { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" /> },
-    { id: 'biometric', label: 'Biometric', icon: <Fingerprint className="w-4 h-4" /> },
+    { id: 'biometric', label: 'Biometric Management', icon: <Fingerprint className="w-4 h-4" /> },
     { id: 'access-monitor', label: 'Access Monitor', icon: <MonitorPlay className="w-4 h-4" /> },
     { id: 'attendance', label: 'Attendance', icon: <CalendarDays className="w-4 h-4" /> },
     { id: 'reports', label: 'Reports', icon: <BarChart3 className="w-4 h-4" /> },

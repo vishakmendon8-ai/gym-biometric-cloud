@@ -74,6 +74,85 @@ export interface AttendanceRecord {
   status: 'granted' | 'denied' | 'flagged';
   reason?: string;
   terminalId: string;
+  deviceId?: string;
+  deviceSn?: string;
+  biometricUserId?: string;
+  eventKey?: string;
+  source?: 'secureye' | 'manual' | 'legacy';
+}
+
+export type BiometricConnectionMethod = 'secureye_cloud_api' | 'secureye_cloud_webhook';
+
+export type BiometricDeviceStatus = 'unverified' | 'disconnected' | 'connected' | 'auth_failed' | 'error';
+
+export type BiometricProtocolStatus = 'unidentified' | 'pending_verification' | 'verified';
+
+export interface BiometricDeviceCloudConfig {
+  p2pCloudId?: string;
+  cloudApiUrl?: string;
+  webhookPath?: string;
+  pushIntervalSec?: number;
+}
+
+export interface BiometricDevice {
+  id: string;
+  name: string;
+  manufacturer: 'Secureye';
+  model: string;
+  serialNumber: string;
+  ipAddress: string;
+  port: number;
+  connectionMethod: BiometricConnectionMethod;
+  protocolStatus: BiometricProtocolStatus;
+  protocolType?: string;
+  username?: string;
+  hasPassword?: boolean;
+  cloudConfig?: BiometricDeviceCloudConfig;
+  status: BiometricDeviceStatus;
+  authStatus: 'unverified' | 'authenticated' | 'failed';
+  lastSyncAt: string | null;
+  lastCommunicationAt: string | null;
+  lastAttendanceAt: string | null;
+  lastError: string | null;
+  registeredUsersCount: number;
+  connectorId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BiometricConnectorStatus {
+  id: string;
+  hostname?: string;
+  status: 'online' | 'offline' | 'error';
+  version?: string;
+  lastHeartbeatAt: string | null;
+  deviceId?: string;
+  lastProbeResult?: {
+    reachable: boolean;
+    authenticated: boolean;
+    message: string;
+    testedAt: string;
+  };
+}
+
+export interface BiometricSyncLog {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warning' | 'error' | 'success';
+  eventType:
+    | 'connection_test'
+    | 'attendance_sync'
+    | 'duplicate_blocked'
+    | 'auth_error'
+    | 'connector_heartbeat'
+    | 'device_config'
+    | 'protocol_mismatch';
+  deviceId?: string;
+  deviceSn?: string;
+  biometricUserId?: string;
+  memberId?: string;
+  message: string;
+  details?: string;
 }
 
 export interface AccessLog {

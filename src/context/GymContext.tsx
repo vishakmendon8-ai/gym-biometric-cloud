@@ -8,7 +8,10 @@ import {
   PaymentRecord, 
   NotificationItem, 
   AdminProfile, 
-  AdminTab 
+  AdminTab,
+  BiometricDevice,
+  BiometricConnectorStatus,
+  BiometricSyncLog
 } from '../types/gym';
 import { 
   ADMIN_PROFILE, 
@@ -20,8 +23,24 @@ import {
   INITIAL_PAYMENTS, 
   INITIAL_NOTIFICATIONS 
 } from '../data/initialData';
-import { db } from '../firebase';
-import { doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase';
+import {
+  collection,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  setDoc,
+  updateDoc,
+  deleteDoc
+} from 'firebase/firestore';
+import {
+  User,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut
+} from 'firebase/auth';
 
 interface GymContextType {
   // Navigation & UI state
@@ -43,6 +62,16 @@ interface GymContextType {
   payments: PaymentRecord[];
   notifications: NotificationItem[];
 
+  // Real Secureye Biometric Collections (Live from Firestore)
+  biometricDevices: BiometricDevice[];
+  biometricConnectors: BiometricConnectorStatus[];
+  biometricSyncLogs: BiometricSyncLog[];
+
+  // Firebase Auth state
+  firebaseUser: User | null;
+  signInAdmin: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signOutAdmin: () => Promise<void>;
+
   // Selected Member
   selectedMember: Member | null;
   setSelectedMember: (member: Member | null) => void;
@@ -51,6 +80,7 @@ interface GymContextType {
   addMember: (memberData: Omit<Member, 'id'>) => Promise<Member>;
   updateMember: (memberId: string, memberData: Partial<Member>) => Promise<void>;
   deleteMember: (memberId: string) => Promise<void>;
+  linkMemberBiometricId: (memberId: string, biometricUserId: string) => Promise<{ ok: boolean; error?: string }>;
 
   // Actions: Plans
   addPlan: (planData: Omit<Plan, 'id'>) => Promise<Plan>;
@@ -65,7 +95,7 @@ interface GymContextType {
   // Actions: Payments
   recordPayment: (paymentData: Omit<PaymentRecord, 'id' | 'invoiceNumber'>) => Promise<PaymentRecord>;
 
-  // Actions: Biometric (Simulation Mode)
+  // Actions: Biometric (Legacy compatibility)
   saveBiometricEnrollment: (memberId: string, token: string, samples: { sample1: boolean; sample2: boolean; sample3: boolean }) => Promise<void>;
   deleteBiometricEnrollment: (memberId: string) => Promise<void>;
 
@@ -81,6 +111,7 @@ interface GymContextType {
 
   // Database Sync
   firebaseConnected: boolean;
+  firestoreError: string | null;
   isSyncing: boolean;
   seedFirestoreData: () => Promise<void>;
 
@@ -111,9 +142,211 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
   const [selectedMember, setSelectedMember] = useState<Member | null>(INITIAL_MEMBERS[0]);
 
+  const [biometricDevices, setBiometricDevices] = useState<BiometricDevice[]>([]);
+  const [biometricConnectors, setBiometricConnectors] = useState<BiometricConnectorStatus[]>([]);
+  const [biometricSyncLogs, setBiometricSyncLogs] = useState<BiometricSyncLog[]>([]);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [firebaseConnected, setFirebaseConnected] = useState<boolean>(true);
+  const [firebaseConnected, setFirebaseConnected] = useState<boolean>(false);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Listen to Firebase Authentication state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsub();
+  }, []);
+
+  // Subscribe to real-time Firestore collections so real biometric scans update the dashboard automatically
+  useEffect(() => {
+    const unsubscribers: Array<() => void> = [];
+
+    const handleSnapshotError = (collectionName: string, err: any) => {
+      const msg = err?.message || `Unable to listen to Firestore collection "${collectionName}".`;
+      setFirestoreError(msg);
+      if (err?.code === 'permission-denied') {
+        setFirebaseConnected(false);
+      }
+    };
+
+    try {
+      // 1. Live Members
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, 'members'),
+          (snap) => {
+            setFirebaseConnected(true);
+            setFirestoreError(null);
+            if (!snap.empty) {
+              const liveMembers = snap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as Omit<Member, 'id'>),
+              }));
+              setMembers(liveMembers);
+            }
+          },
+          (err) => handleSnapshotError('members', err)
+        )
+      );
+
+      // 2. Live Attendance Records (updates Dashboard & Attendance View immediately on real scans)
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, 'attendance'), orderBy('createdAt', 'desc'), limit(200)),
+          (snap) => {
+            setFirebaseConnected(true);
+            setFirestoreError(null);
+            if (!snap.empty) {
+              const liveAttendance = snap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as Omit<AttendanceRecord, 'id'>),
+              }));
+              setAttendance(liveAttendance);
+            }
+          },
+          (err) => {
+            // Fallback without orderBy if existing seeded docs lack createdAt
+            if (err?.code === 'failed-precondition') {
+              unsubscribers.push(
+                onSnapshot(
+                  collection(db, 'attendance'),
+                  (snap) => {
+                    if (!snap.empty) {
+                      setAttendance(
+                        snap.docs.map((d) => ({
+                          id: d.id,
+                          ...(d.data() as Omit<AttendanceRecord, 'id'>),
+                        }))
+                      );
+                    }
+                  },
+                  (fallbackErr) => handleSnapshotError('attendance', fallbackErr)
+                )
+              );
+            } else {
+              handleSnapshotError('attendance', err);
+            }
+          }
+        )
+      );
+
+      // 3. Live Access Logs
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, 'access_logs'), orderBy('createdAt', 'desc'), limit(100)),
+          (snap) => {
+            if (!snap.empty) {
+              setAccessLogs(
+                snap.docs.map((d) => ({
+                  id: d.id,
+                  ...(d.data() as Omit<AccessLog, 'id'>),
+                }))
+              );
+            }
+          },
+          () => {
+            // Access logs optional until first event
+          }
+        )
+      );
+
+      // 4. Registered Secureye Biometric Devices
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, 'biometric_devices'),
+          (snap) => {
+            setFirebaseConnected(true);
+            setFirestoreError(null);
+            setBiometricDevices(
+              snap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as Omit<BiometricDevice, 'id'>),
+              }))
+            );
+          },
+          (err) => handleSnapshotError('biometric_devices', err)
+        )
+      );
+
+      // 5. Local Biometric Connectors Status
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, 'biometric_connectors'),
+          (snap) => {
+            setBiometricConnectors(
+              snap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as Omit<BiometricConnectorStatus, 'id'>),
+              }))
+            );
+          },
+          () => {
+            // Handled via biometric_devices error listener
+          }
+        )
+      );
+
+      // 6. Biometric Synchronization & Diagnostic Logs
+      unsubscribers.push(
+        onSnapshot(
+          query(collection(db, 'biometric_sync_logs'), orderBy('createdAt', 'desc'), limit(100)),
+          (snap) => {
+            setBiometricSyncLogs(
+              snap.docs.map((d) => ({
+                id: d.id,
+                ...(d.data() as Omit<BiometricSyncLog, 'id'>),
+              }))
+            );
+          },
+          () => {
+            // Handled via biometric_devices error listener
+          }
+        )
+      );
+    } catch (err: any) {
+      setFirestoreError(err?.message || 'Failed to initialize Firestore listeners.');
+    }
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [firebaseUser?.uid]);
+
+  const signInAdmin = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Firebase Admin sign-in failed.' };
+    }
+  };
+
+  const signOutAdmin = async () => {
+    await signOut(auth);
+  };
+
+  const linkMemberBiometricId = async (memberId: string, biometricUserId: string) => {
+    const cleaned = biometricUserId.trim();
+    const isLinked = cleaned.length > 0 && cleaned !== 'NONE' && cleaned !== 'BIO-FP-UNREGISTERED';
+    const patch: Partial<Member> = {
+      biometricId: isLinked ? cleaned : '',
+      biometricRegistered: isLinked,
+    };
+
+    try {
+      await setDoc(doc(db, 'members', memberId), patch, { merge: true });
+      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, ...patch } : m)));
+      return { ok: true };
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err?.message || 'Failed to save biometric User ID to Firestore. Verify Admin sign-in.',
+      };
+    }
+  };
 
   // Determine active view from URL path, query params, or hash
   const getInitialView = (): 'admin' | 'member' | 'biometric' => {
@@ -659,11 +892,18 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       accessLogs,
       payments,
       notifications,
+      biometricDevices,
+      biometricConnectors,
+      biometricSyncLogs,
+      firebaseUser,
+      signInAdmin,
+      signOutAdmin,
       selectedMember,
       setSelectedMember,
       addMember,
       updateMember,
       deleteMember,
+      linkMemberBiometricId,
       addPlan,
       updatePlan,
       deletePlan,
@@ -680,6 +920,7 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       markNotificationRead,
       clearNotifications,
       firebaseConnected,
+      firestoreError,
       isSyncing,
       seedFirestoreData,
       activeView,
