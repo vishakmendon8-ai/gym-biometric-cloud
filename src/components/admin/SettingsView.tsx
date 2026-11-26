@@ -25,13 +25,11 @@ import {
   Cloud
 } from 'lucide-react';
 import { NotificationService, ExpiryDispatchResult } from '../../services/notificationService';
-import { P2PBiometricModal } from './P2PBiometricModal';
 
 export const SettingsView: React.FC = () => {
-  const { soundEnabled, setSoundEnabled, members } = useGym();
+  const { soundEnabled, setSoundEnabled, members, setCurrentTab } = useGym();
 
   const [saved, setSaved] = useState(false);
-  const [isP2PModalOpen, setIsP2PModalOpen] = useState(false);
   const [dispatchRunning, setDispatchRunning] = useState(false);
   const [dispatchLogs, setDispatchLogs] = useState<ExpiryDispatchResult[] | null>(null);
   const [gymName, setGymName] = useState('GYMPRO Fitness Center');
@@ -261,38 +259,37 @@ export const SettingsView: React.FC = () => {
                 Hardware Device Profile
               </label>
               <div className="p-3 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] space-y-1">
-                <p className="font-bold text-[#252A30]">SecuGen Hamster Pro 20 / Optical 500 DPI</p>
-                <p className="text-[11px] text-[#84909A]">Protocol: USB-HID Direct Wedge • Multi-sample: 3-Sample Verification</p>
+                <p className="font-bold text-[#252A30]">Secureye Fingerprint Attendance Terminal</p>
+                <p className="text-[11px] text-[#84909A] font-mono">
+                  SN: 102026020002110 • P2P ID: BD77B4BE-3765DCD • WLAN: 192.168.1.101
+                </p>
               </div>
             </div>
           </div>
 
-          {/* P2P Cloud Hardware Gateway Integration Card */}
+          {/* Direct Cloud / ADMS Biometric Management Shortcut */}
           <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-yellow-soft/60 via-white to-yellow-soft/30 border border-yellow-sunshine/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-graphite flex items-center justify-center text-yellow-sunshine shrink-0 shadow-sm">
                 <Cloud className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-sm text-graphite">P2P Cloud Biometric Gateway</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold uppercase">
-                    Supported
-                  </span>
-                </div>
+                <h3 className="font-extrabold text-sm text-graphite">
+                  Secureye Biometric Management &amp; ADMS Server
+                </h3>
                 <p className="text-[11px] text-graphite-muted">
-                  Connect standalone internet/Wi-Fi machines (ZKTeco ADMS, eSSL, Realtime, Hikvision, Dahua) via Cloud Webhook.
+                  Manage your Secureye device registration, Member User ID mapping, ADMS Live Server, and real diagnostics.
                 </p>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => setIsP2PModalOpen(true)}
+              onClick={() => setCurrentTab('biometric')}
               className="btn-jelly-yellow px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shrink-0 shadow-yellow-btn"
             >
               <Cloud className="w-3.5 h-3.5" />
-              <span>Configure P2P Device</span>
+              <span>Open Biometric Management</span>
             </button>
           </div>
         </div>
@@ -442,12 +439,6 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
       </form>
-
-      {/* P2P Cloud Biometric Gateway Modal */}
-      <P2PBiometricModal
-        isOpen={isP2PModalOpen}
-        onClose={() => setIsP2PModalOpen(false)}
-      />
     </div>
   );
 };

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGym } from '../../context/GymContext';
-import { X, UserPlus, Check, User, Phone, Mail, Calendar, MapPin, ShieldAlert, Sparkles, Fingerprint, CheckCircle2, RotateCcw } from 'lucide-react';
-import { useUsbBiometric } from '../../hooks/useUsbBiometric';
+import { X, UserPlus, Check, User, Phone, Mail, Calendar, MapPin, ShieldAlert, Fingerprint } from 'lucide-react';
 
 export const AddMemberModal: React.FC = () => {
-  const { isAddMemberOpen, setIsAddMemberOpen, addMember, plans, playAccessTone } = useGym();
+  const { isAddMemberOpen, setIsAddMemberOpen, addMember, plans } = useGym();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,73 +13,17 @@ export const AddMemberModal: React.FC = () => {
   const [address, setAddress] = useState('Surathkal, Mangalore');
   const [planId, setPlanId] = useState('plan-monthly');
   const [emergencyContact, setEmergencyContact] = useState('');
+  const [biometricUserId, setBiometricUserId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 3-Sample Biometric Enrollment State
-  const [bioToken, setBioToken] = useState<string>(`BIO-FP-${Math.floor(1000 + Math.random() * 9000)}`);
-  const [samples, setSamples] = useState({
-    sample1: false,
-    sample2: false,
-    sample3: false
-  });
-  const [capturingStep, setCapturingStep] = useState<1 | 2 | 3 | 'all' | null>(null);
-
-  // USB Biometric Sensor Detection Hook
-  const { isSensorConnected, sensorName, isReadingData, detectUsbDevice, lastDataRead } = useUsbBiometric();
-
-  // Reset or regenerate token when modal opens
+  // Reset form when modal opens
   useEffect(() => {
     if (isAddMemberOpen) {
-      setBioToken(`BIO-FP-${Math.floor(1000 + Math.random() * 9000)}`);
-      setSamples({ sample1: false, sample2: false, sample3: false });
-      setCapturingStep(null);
+      setBiometricUserId('');
     }
   }, [isAddMemberOpen]);
 
-  // If USB scanner sends data while modal is open, auto-advance sample capture
-  useEffect(() => {
-    if (isAddMemberOpen && lastDataRead) {
-      if (!samples.sample1) {
-        handleCaptureSample(1);
-      } else if (!samples.sample2) {
-        handleCaptureSample(2);
-      } else if (!samples.sample3) {
-        handleCaptureSample(3);
-      }
-    }
-  }, [lastDataRead, isAddMemberOpen]);
-
   if (!isAddMemberOpen) return null;
-
-  const handleCaptureSample = (step: 1 | 2 | 3) => {
-    setCapturingStep(step);
-    playAccessTone('beep');
-
-    setTimeout(() => {
-      setSamples(prev => ({ ...prev, [`sample${step}`]: true }));
-      setCapturingStep(null);
-      playAccessTone('granted');
-    }, 600);
-  };
-
-  const handleCaptureAll = () => {
-    setCapturingStep('all');
-    playAccessTone('beep');
-
-    setTimeout(() => {
-      setSamples({ sample1: true, sample2: true, sample3: true });
-      setCapturingStep(null);
-      playAccessTone('granted');
-    }, 900);
-  };
-
-  const handleResetSamples = () => {
-    setSamples({ sample1: false, sample2: false, sample3: false });
-    playAccessTone('beep');
-  };
-
-  const capturedCount = [samples.sample1, samples.sample2, samples.sample3].filter(Boolean).length;
-  const isAllCaptured = capturedCount === 3;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,8 +34,8 @@ export const AddMemberModal: React.FC = () => {
     const now = new Date();
     const expiry = new Date();
     expiry.setMonth(now.getMonth() + selectedPlan.durationMonths);
+    const cleanedBioId = biometricUserId.trim();
 
-    // Save member connected to the 3-sample biometric template
     await addMember({
       name: name.trim(),
       email: email.trim().toLowerCase(),
@@ -108,11 +51,10 @@ export const AddMemberModal: React.FC = () => {
       status: 'active',
       joinDate: now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       expiryDate: expiry.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      biometricId: bioToken,
-      biometricRegistered: isAllCaptured || capturedCount > 0,
-      biometricSamples: samples,
+      biometricId: cleanedBioId,
+      biometricRegistered: cleanedBioId.length > 0,
       daysLeft: selectedPlan.durationMonths * 30,
-      totalCheckIns: 1,
+      totalCheckIns: 0,
       emergencyContact: emergencyContact || 'Contact (+91 98765 00000)'
     });
 
@@ -249,121 +191,22 @@ export const AddMemberModal: React.FC = () => {
             </div>
           </div>
 
-          {/* 3-Sample Biometric Enrollment & USB Sensor Module */}
-          <div className="p-3.5 rounded-2xl bg-[#FFF8E7]/50 border border-[#FFD447]/60 space-y-3">
-            {/* Sensor Detection Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#FFD447]/30">
-              <div className="flex items-center gap-2">
-                <Fingerprint className="w-4 h-4 text-[#252A30]" />
-                <span className="font-extrabold text-xs text-[#252A30] uppercase tracking-wider">
-                  3-Sample Biometric Enrollment
-                </span>
-              </div>
-
-              {/* USB Sensor Status Pill */}
-              <div 
-                onClick={!isSensorConnected ? detectUsbDevice : undefined}
-                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs transition-all ${
-                  isSensorConnected || isReadingData
-                    ? 'bg-[#36A875]/15 border border-[#36A875]/40 text-[#36A875]'
-                    : 'bg-white border border-[#DCE3E8] text-[#84909A] hover:border-[#FFD447] cursor-pointer'
-                }`}
-                title={isSensorConnected ? `${sensorName} connected and active` : 'Click to detect USB sensor'}
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${
-                  isReadingData 
-                    ? 'bg-[#FFD447] animate-ping' 
-                    : isSensorConnected 
-                    ? 'bg-[#36A875] animate-pulse' 
-                    : 'bg-[#84909A]'
-                }`} />
-                <span className="font-black text-[11px]">
-                  {isReadingData
-                    ? 'Reading USB Data...'
-                    : isSensorConnected
-                    ? 'Sensor Connected'
-                    : 'Sensor Not Detected'}
-                </span>
-              </div>
-            </div>
-
-            {/* 3 Biometric Sample Slots */}
-            <div className="grid grid-cols-3 gap-2.5">
-              {([1, 2, 3] as const).map((step) => {
-                const isCaptured = samples[`sample${step}`];
-                const isBusy = capturingStep === step || capturingStep === 'all';
-
-                return (
-                  <div
-                    key={step}
-                    onClick={() => !isCaptured && handleCaptureSample(step)}
-                    className={`p-2.5 rounded-xl border text-center transition-all flex flex-col items-center justify-between cursor-pointer ${
-                      isCaptured
-                        ? 'bg-[#36A875]/10 border-[#36A875]/40 text-[#36A875]'
-                        : isBusy
-                        ? 'bg-[#FFF8E7] border-[#FFD447] ring-2 ring-[#FFD447]/50 animate-pulse'
-                        : 'bg-white border-[#DCE3E8] hover:border-[#FFD447] hover:shadow-xs'
-                    }`}
-                  >
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#84909A]">
-                      Sample {step}
-                    </span>
-
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center my-1.5 transition-all ${
-                      isCaptured
-                        ? 'bg-[#36A875] text-white shadow-xs'
-                        : isBusy
-                        ? 'bg-[#FFD447] text-[#252A30] animate-bounce'
-                        : 'bg-[#F5F6F2] text-[#84909A]'
-                    }`}>
-                      <Fingerprint className="w-5 h-5" />
-                    </div>
-
-                    <span className="text-[10px] font-extrabold">
-                      {isCaptured ? '99.4% Verified' : isBusy ? 'Scanning...' : 'Tap to Scan'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Status & Quick Action Controls */}
-            <div className="flex items-center justify-between pt-1 text-[11px]">
-              <div className="flex items-center gap-2">
-                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                  isAllCaptured 
-                    ? 'bg-[#36A875] text-white' 
-                    : 'bg-[#252A30] text-white'
-                }`}>
-                  {isAllCaptured ? '3/3 Enrolled' : `${capturedCount}/3 Captured`}
-                </span>
-                <span className="font-mono text-[#84909A] text-[10px]">
-                  Token: <strong className="text-[#252A30]">{bioToken}</strong>
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {!isAllCaptured && (
-                  <button
-                    type="button"
-                    onClick={handleCaptureAll}
-                    disabled={capturingStep !== null}
-                    className="text-[11px] font-bold text-[#252A30] hover:text-[#E5B82A] underline disabled:opacity-50"
-                  >
-                    Scan All 3 Samples
-                  </button>
-                )}
-                {capturedCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleResetSamples}
-                    className="text-[11px] font-bold text-[#84909A] hover:text-[#DC5555]"
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
+          {/* Optional Secureye Biometric User ID Link */}
+          <div className="p-3.5 rounded-2xl bg-[#F5F6F2] border border-[#DCE3E8] space-y-2">
+            <label className="flex items-center gap-1.5 text-xs font-extrabold text-[#252A30]">
+              <Fingerprint className="w-4 h-4 text-[#E5B82A]" />
+              <span>Secureye Biometric User ID (Optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. 101 (ID enrolled on physical Secureye machine)"
+              value={biometricUserId}
+              onChange={(e) => setBiometricUserId(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#DCE3E8] text-[#252A30] font-mono font-bold text-xs focus:outline-none focus:border-[#FFD447] transition-all"
+            />
+            <p className="text-[11px] text-[#84909A]">
+              Enroll the member&apos;s fingerprint directly on your Secureye machine and enter that exact User ID here (or map it later in Biometric Management).
+            </p>
           </div>
 
           {/* Modal Actions */}

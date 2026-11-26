@@ -242,55 +242,47 @@ export const MemberDossierModal: React.FC<MemberDossierModalProps> = ({ member, 
             <div className="space-y-4">
               <div className="p-5 rounded-card bg-graphite text-white flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-cloud-grey/70">Hardware Token</span>
-                  <p className="font-mono text-lg font-black text-yellow-sunshine mt-0.5">{member.biometricId}</p>
-                  <p className="text-[11px] text-cloud-grey/60 mt-1">Status: Registered & Verified on 500 DPI Ridge Sensor</p>
+                  <span className="text-[10px] uppercase font-bold text-cloud-grey/70">
+                    Secureye Biometric User ID
+                  </span>
+                  <p className="font-mono text-lg font-black text-yellow-sunshine mt-0.5">
+                    {member.biometricRegistered && member.biometricId
+                      ? member.biometricId
+                      : 'Not Linked'}
+                  </p>
+                  <p className="text-[11px] text-cloud-grey/60 mt-1">
+                    {member.biometricRegistered && member.biometricId
+                      ? 'Linked to external Secureye biometric terminal'
+                      : 'Enroll fingerprint on the Secureye machine and link the User ID in Biometric Management'}
+                  </p>
                 </div>
                 <div className="w-14 h-14 rounded-full bg-graphite-light border border-graphite-muted flex items-center justify-center">
                   <Fingerprint className="w-8 h-8 text-yellow-sunshine" />
                 </div>
               </div>
 
-              {/* 3-Sample Template Status */}
-              <div className="p-4 rounded-xl bg-cloud border border-cloud-border space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h5 className="font-bold text-xs text-graphite uppercase tracking-wider">3-Sample Biometric Template</h5>
-                  <span className="px-2 py-0.5 rounded-full bg-status-success/15 text-status-success text-[10px] font-black">
-                    {member.biometricRegistered ? '3/3 Samples Connected' : 'Pending Enrollment'}
+              <div className="p-4 rounded-card bg-white border border-cloud-border space-y-2">
+                <h5 className="font-bold text-graphite text-xs uppercase tracking-wider">
+                  Membership Access Eligibility
+                </h5>
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <span className="text-graphite-muted">Plan Status</span>
+                  <span className={`font-black uppercase ${
+                    member.status === 'active' ? 'text-status-success' : 'text-status-error'
+                  }`}>
+                    {member.status}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="p-2.5 rounded-xl bg-white border border-cloud-border">
-                    <span className="text-[10px] font-bold text-graphite-muted block uppercase">Sample 1</span>
-                    <span className="text-[11px] font-black text-status-success mt-0.5 block">✓ 99.4% Match</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-cloud-border">
-                    <span className="text-[10px] font-bold text-graphite-muted block uppercase">Sample 2</span>
-                    <span className="text-[11px] font-black text-status-success mt-0.5 block">✓ 98.9% Match</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-white border border-cloud-border">
-                    <span className="text-[10px] font-bold text-graphite-muted block uppercase">Sample 3</span>
-                    <span className="text-[11px] font-black text-status-success mt-0.5 block">✓ 99.6% Match</span>
-                  </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-graphite-muted">Expiry Date</span>
+                  <span className="font-mono font-bold text-graphite">{member.expiryDate}</span>
                 </div>
-              </div>
-
-              <div className="p-4 rounded-card bg-white border border-cloud-border space-y-2">
-                <h5 className="font-bold text-graphite">Hardware Access Rights</h5>
-                <ul className="space-y-1.5 text-graphite text-xs">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
-                    Turnstile Alpha (Main Gate) — Unlocked
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
-                    Turnstile Beta (Express Lane) — Unlocked
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
-                    Locker Room Electronic Solenoid — Authorized
-                  </li>
-                </ul>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-graphite-muted">Last Verified Check-In</span>
+                  <span className="font-mono font-semibold text-graphite">
+                    {member.lastCheckIn || member.lastVisit || 'No check-ins yet'}
+                  </span>
+                </div>
               </div>
             </div>
           )}
