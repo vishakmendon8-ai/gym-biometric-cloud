@@ -112,17 +112,18 @@ export const BiometricView: React.FC = () => {
   const [checkingHealth, setCheckingHealth] = useState(false);
 
   // Device registration / configuration form state (Direct Cloud Only)
+  // Pre-filled with verified Secureye hardware values from device screen (no invented API URLs or credentials)
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
-  const [deviceName, setDeviceName] = useState('');
-  const [deviceModel, setDeviceModel] = useState('');
-  const [serialNumber, setSerialNumber] = useState('');
-  const [ipAddress, setIpAddress] = useState('');
-  const [port, setPort] = useState('443');
+  const [deviceName, setDeviceName] = useState('Main Entrance Secureye Terminal');
+  const [deviceModel, setDeviceModel] = useState('Secureye P2P Biometric (Unidentified Model)');
+  const [serialNumber, setSerialNumber] = useState('102026020002110');
+  const [ipAddress, setIpAddress] = useState('192.168.1.101');
+  const [port, setPort] = useState('4000');
   const [connectionMethod, setConnectionMethod] =
-    useState<BiometricConnectionMethod>('secureye_cloud_api');
+    useState<BiometricConnectionMethod>('secureye_cloud_webhook');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [p2pCloudId, setP2pCloudId] = useState('');
+  const [p2pCloudId, setP2pCloudId] = useState('BD77B4BE-3765DCD');
   const [cloudApiUrl, setCloudApiUrl] = useState('');
   const [pushIntervalSec, setPushIntervalSec] = useState('300');
 
