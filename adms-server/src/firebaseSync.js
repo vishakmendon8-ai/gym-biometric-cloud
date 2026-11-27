@@ -117,6 +117,39 @@ export async function syncDeviceHeartbeatToFirestore({ serialNumber, ipAddress }
   }
 }
 
+async function findMemberByBiometricUserId(membersRef, biometricUserId) {
+  const rawId = String(biometricUserId ?? '').trim();
+  if (!rawId) return null;
+
+  const isNumeric = /^\d+$/.test(rawId);
+  const normalizedId = isNumeric ? String(Number(rawId)) : rawId;
+
+  const byExact = await membersRef
+    .where('biometricId', '==', rawId)
+    .limit(1)
+    .get();
+  if (!byExact.empty) return byExact.docs[0];
+
+  if (normalizedId !== rawId) {
+    const byNormalized = await membersRef
+      .where('biometricId', '==', normalizedId)
+      .limit(1)
+      .get();
+    if (!byNormalized.empty) return byNormalized.docs[0];
+  }
+
+  const direct = await membersRef.doc(rawId).get();
+  if (direct.exists) return direct;
+
+  if (isNumeric) {
+    const paddedGymId = `GYM${normalizedId.padStart(4, '0')}`;
+    const byGymDoc = await membersRef.doc(paddedGymId).get();
+    if (byGymDoc.exists) return byGymDoc;
+  }
+
+  return null;
+}
+
 export async function syncPunchToFirestore({
   deviceSn,
   employeeCode,
@@ -133,15 +166,7 @@ export async function syncPunchToFirestore({
       .digest('hex');
 
     const membersRef = firestoreDb.collection('members');
-    let memberDoc = null;
-
-    const byBio = await membersRef.where('biometricId', '==', employeeCode).limit(1).get();
-    if (!byBio.empty) {
-      memberDoc = byBio.docs[0];
-    } else {
-      const direct = await membersRef.doc(employeeCode).get();
-      if (direct.exists) memberDoc = direct;
-    }
+    const memberDoc = await findMemberByBiometricUserId(membersRef, employeeCode);
 
     const memberData = memberDoc ? memberDoc.data() : null;
     const verdict = evaluateMembership(memberData, punchDate);

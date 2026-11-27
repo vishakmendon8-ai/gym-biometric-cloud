@@ -329,8 +329,25 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const linkMemberBiometricId = async (memberId: string, biometricUserId: string) => {
-    const cleaned = biometricUserId.trim();
+    const raw = biometricUserId.trim();
+    const cleaned = /^\d+$/.test(raw) ? String(Number(raw)) : raw;
     const isLinked = cleaned.length > 0 && cleaned !== 'NONE' && cleaned !== 'BIO-FP-UNREGISTERED';
+
+    if (isLinked) {
+      const duplicateOwner = members.find(
+        (m) =>
+          m.id !== memberId &&
+          m.biometricId &&
+          m.biometricId.trim().toLowerCase() === cleaned.toLowerCase()
+      );
+      if (duplicateOwner) {
+        return {
+          ok: false,
+          error: `Biometric User ID "${cleaned}" is already assigned to ${duplicateOwner.name} (${duplicateOwner.id}). Each Secureye machine User ID must be unique.`,
+        };
+      }
+    }
+
     const patch: Partial<Member> = {
       biometricId: isLinked ? cleaned : '',
       biometricRegistered: isLinked,

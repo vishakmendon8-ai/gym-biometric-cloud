@@ -198,6 +198,44 @@ function buildEventKey(deviceSn, biometricUserId, punchTimeIso) {
 }
 
 /**
+ * Resolve a Secureye machine biometricUserId to a Firestore member document.
+ * Handles exact match, leading-zero-stripped numeric IDs ("0101" -> "101"),
+ * direct document ID, and padded Gym ID fallback ("341" -> "GYM0341").
+ */
+async function findMemberByBiometricUserId(membersRef, biometricUserId) {
+  const rawId = String(biometricUserId ?? '').trim();
+  if (!rawId) return null;
+
+  const isNumeric = /^\d+$/.test(rawId);
+  const normalizedId = isNumeric ? String(Number(rawId)) : rawId;
+
+  const byExact = await membersRef
+    .where('biometricId', '==', rawId)
+    .limit(1)
+    .get();
+  if (!byExact.empty) return byExact.docs[0];
+
+  if (normalizedId !== rawId) {
+    const byNormalized = await membersRef
+      .where('biometricId', '==', normalizedId)
+      .limit(1)
+      .get();
+    if (!byNormalized.empty) return byNormalized.docs[0];
+  }
+
+  const directDoc = await membersRef.doc(rawId).get();
+  if (directDoc.exists) return directDoc;
+
+  if (isNumeric) {
+    const paddedGymId = `GYM${normalizedId.padStart(4, '0')}`;
+    const byGymDoc = await membersRef.doc(paddedGymId).get();
+    if (byGymDoc.exists) return byGymDoc;
+  }
+
+  return null;
+}
+
+/**
  * Process a single real attendance event from Secureye Cloud, enforce deduplication,
  * match biometricUserId -> Gym Member ID, validate membership expiry, and write to Firestore.
  */
@@ -250,20 +288,7 @@ async function processCloudAttendanceEvent(evt) {
 
   // 2. Match Biometric User ID -> Gym Member ID
   const membersRef = db.collection('members');
-  let memberDoc = null;
-
-  const byBiometricId = await membersRef
-    .where('biometricId', '==', biometricUserId)
-    .limit(1)
-    .get();
-  if (!byBiometricId.empty) {
-    memberDoc = byBiometricId.docs[0];
-  } else {
-    const directDoc = await membersRef.doc(biometricUserId).get();
-    if (directDoc.exists) {
-      memberDoc = directDoc;
-    }
-  }
+  const memberDoc = await findMemberByBiometricUserId(membersRef, biometricUserId);
 
   const memberData = memberDoc ? memberDoc.data() : null;
   const verdict = evaluateMembershipAccess(memberData, validPunchDate);

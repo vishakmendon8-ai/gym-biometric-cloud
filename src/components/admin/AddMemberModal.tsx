@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useGym } from '../../context/GymContext';
-import { X, UserPlus, Check, User, Phone, Mail, Calendar, MapPin, ShieldAlert, Fingerprint } from 'lucide-react';
+import { X, UserPlus, Check, ShieldAlert, Fingerprint } from 'lucide-react';
 
 export const AddMemberModal: React.FC = () => {
-  const { isAddMemberOpen, setIsAddMemberOpen, addMember, plans } = useGym();
+  const { isAddMemberOpen, setIsAddMemberOpen, addMember, plans, members } = useGym();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,14 +14,23 @@ export const AddMemberModal: React.FC = () => {
   const [planId, setPlanId] = useState('plan-monthly');
   const [emergencyContact, setEmergencyContact] = useState('');
   const [biometricUserId, setBiometricUserId] = useState('');
+  const [bioError, setBioError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form when modal opens
+  const existingNumericIds = members
+    .map((m) => (m.biometricId && /^\d+$/.test(m.biometricId.trim()) ? Number(m.biometricId.trim()) : 0))
+    .filter((n) => n > 0);
+  const suggestedMachineId = String(
+    existingNumericIds.length > 0 ? Math.max(...existingNumericIds) + 1 : members.length + 342
+  );
+
+  // Pre-fill suggested clean numeric Secureye Machine User ID when modal opens
   useEffect(() => {
     if (isAddMemberOpen) {
-      setBiometricUserId('');
+      setBiometricUserId(suggestedMachineId);
+      setBioError(null);
     }
-  }, [isAddMemberOpen]);
+  }, [isAddMemberOpen, suggestedMachineId]);
 
   if (!isAddMemberOpen) return null;
 
@@ -29,12 +38,27 @@ export const AddMemberModal: React.FC = () => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) return;
 
+    const rawBio = biometricUserId.trim();
+    const cleanedBioId = /^\d+$/.test(rawBio) ? String(Number(rawBio)) : rawBio;
+
+    if (cleanedBioId) {
+      const conflict = members.find(
+        (m) => m.biometricId && m.biometricId.trim().toLowerCase() === cleanedBioId.toLowerCase()
+      );
+      if (conflict) {
+        setBioError(
+          `Machine User ID "${cleanedBioId}" is already linked to ${conflict.name} (${conflict.id}). Choose a unique number.`
+        );
+        return;
+      }
+    }
+
+    setBioError(null);
     setIsSubmitting(true);
     const selectedPlan = plans.find(p => p.id === planId) || plans[0];
     const now = new Date();
     const expiry = new Date();
     expiry.setMonth(now.getMonth() + selectedPlan.durationMonths);
-    const cleanedBioId = biometricUserId.trim();
 
     await addMember({
       name: name.trim(),
@@ -191,21 +215,48 @@ export const AddMemberModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Optional Secureye Biometric User ID Link */}
+          {/* Secureye Biometric User ID Link */}
           <div className="p-3.5 rounded-2xl bg-[#F5F6F2] border border-[#DCE3E8] space-y-2">
-            <label className="flex items-center gap-1.5 text-xs font-extrabold text-[#252A30]">
-              <Fingerprint className="w-4 h-4 text-[#E5B82A]" />
-              <span>Secureye Biometric User ID (Optional)</span>
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 text-xs font-extrabold text-[#252A30]">
+                <Fingerprint className="w-4 h-4 text-[#E5B82A]" />
+                <span>Secureye Machine User ID</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setBiometricUserId(suggestedMachineId);
+                  setBioError(null);
+                }}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#FFF6D6] text-[#9A7400] border border-[#F5C62F]/50 hover:bg-[#FFD447]/40 transition-colors"
+              >
+                Use #{suggestedMachineId}
+              </button>
+            </div>
             <input
               type="text"
-              placeholder="e.g. 101 (ID enrolled on physical Secureye machine)"
+              inputMode="numeric"
+              placeholder={`e.g. ${suggestedMachineId} (plain number matching machine User ID)`}
               value={biometricUserId}
-              onChange={(e) => setBiometricUserId(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-white border border-[#DCE3E8] text-[#252A30] font-mono font-bold text-xs focus:outline-none focus:border-[#FFD447] transition-all"
+              onChange={(e) => {
+                setBiometricUserId(e.target.value);
+                if (bioError) setBioError(null);
+              }}
+              className={`w-full px-3.5 py-2 rounded-xl bg-white border text-[#252A30] font-mono font-bold text-xs focus:outline-none transition-all ${
+                bioError
+                  ? 'border-red-400 focus:border-red-500'
+                  : 'border-[#DCE3E8] focus:border-[#FFD447]'
+              }`}
             />
-            <p className="text-[11px] text-[#84909A]">
-              Enroll the member&apos;s fingerprint directly on your Secureye machine and enter that exact User ID here (or map it later in Biometric Management).
+            {bioError && (
+              <div className="flex items-start gap-1.5 text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{bioError}</span>
+              </div>
+            )}
+            <p className="text-[11px] text-[#5C6670] leading-relaxed">
+              On your Secureye machine go to <span className="font-bold text-[#252A30]">Menu → User Mgt → New User</span>, enter User ID{' '}
+              <span className="font-mono font-bold text-[#252A30]">{biometricUserId.trim() || suggestedMachineId}</span>, and scan the member&apos;s finger there. Leave blank to link later in Biometric Management.
             </p>
           </div>
 

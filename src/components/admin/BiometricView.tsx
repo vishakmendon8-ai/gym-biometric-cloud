@@ -962,6 +962,28 @@ export const BiometricView: React.FC = () => {
             </div>
           </div>
 
+          {/* 3-Step Pairing Guide */}
+          <div className="p-3.5 rounded-xl bg-[#FFF8E7] border border-[#FFD447]/60 text-xs text-[#252A30] grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <span className="font-black block">1. Enroll on Secureye Machine</span>
+              <span className="text-[11px] text-[#5A646E]">
+                Open <strong>Menu → User Mgt → New User</strong>, assign a numeric User ID (e.g. <code>341</code>), and scan the member&apos;s finger.
+              </span>
+            </div>
+            <div>
+              <span className="font-black block">2. Save Same User ID Below</span>
+              <span className="text-[11px] text-[#5A646E]">
+                Enter that exact numeric ID (no leading zeros) next to the member profile and click <strong>Save Mapping</strong>.
+              </span>
+            </div>
+            <div>
+              <span className="font-black block">3. Automatic Attendance Match</span>
+              <span className="text-[11px] text-[#5A646E]">
+                Every scan matches <code>User ID → Member Profile</code>, verifies expiry, and updates Firestore in real time.
+              </span>
+            </div>
+          </div>
+
           {mappingFeedback && (
             <div
               className={`p-3 rounded-xl text-xs font-semibold border flex items-center gap-2 ${
@@ -985,7 +1007,7 @@ export const BiometricView: React.FC = () => {
                 <tr className="bg-[#F5F6F2] border-b border-[#DCE3E8] text-[11px] font-bold text-[#84909A] uppercase tracking-wider">
                   <th className="py-3 px-3">Gym Member</th>
                   <th className="py-3 px-3">Membership & Expiry</th>
-                  <th className="py-3 px-3">Secureye Device User ID</th>
+                  <th className="py-3 px-3">Secureye Machine User ID</th>
                   <th className="py-3 px-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -996,6 +1018,7 @@ export const BiometricView: React.FC = () => {
                       ? memberBiometricDrafts[member.id]
                       : member.biometricId || '';
                   const isSaving = savingMemberId === member.id;
+                  const numericSuggestion = member.id.replace(/^\D+0*/, '') || member.id;
 
                   return (
                     <tr key={member.id} className="hover:bg-[#F5F6F2]/50">
@@ -1029,18 +1052,35 @@ export const BiometricView: React.FC = () => {
                         </p>
                       </td>
                       <td className="py-3 px-3">
-                        <input
-                          type="text"
-                          placeholder="e.g. 101"
-                          value={draftVal}
-                          onChange={(e) =>
-                            setMemberBiometricDrafts((prev) => ({
-                              ...prev,
-                              [member.id]: e.target.value,
-                            }))
-                          }
-                          className="w-40 px-2.5 py-1.5 rounded-lg bg-[#F5F6F2] border border-[#DCE3E8] font-mono font-bold text-xs text-[#252A30] focus:outline-none focus:border-[#FFD447]"
-                        />
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder={`e.g. ${numericSuggestion}`}
+                            value={draftVal}
+                            onChange={(e) =>
+                              setMemberBiometricDrafts((prev) => ({
+                                ...prev,
+                                [member.id]: e.target.value,
+                              }))
+                            }
+                            className="w-32 px-2.5 py-1.5 rounded-lg bg-[#F5F6F2] border border-[#DCE3E8] font-mono font-bold text-xs text-[#252A30] focus:outline-none focus:border-[#FFD447]"
+                          />
+                          {draftVal !== numericSuggestion && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMemberBiometricDrafts((prev) => ({
+                                  ...prev,
+                                  [member.id]: numericSuggestion,
+                                }))
+                              }
+                              className="px-2 py-1 rounded-lg bg-[#F5F6F2] border border-[#DCE3E8] hover:border-[#FFD447] text-[10px] font-bold text-[#5A646E]"
+                              title={`Use ${numericSuggestion} (matches ${member.id})`}
+                            >
+                              Use {numericSuggestion}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-3 text-right">
                         <button
