@@ -573,12 +573,6 @@ export const MemberApp: React.FC = () => {
       } else {
         setCurrentScreen('home');
       }
-    } else if (loginEmail.toLowerCase().includes('vishak') || loginEmail.includes('10042') || loginEmail.includes('98765')) {
-      setCurrentMember(masterVishak);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('gympro_member_session', masterVishak.id);
-      }
-      setCurrentScreen('home');
     } else {
       setLoginError('Account not found. Please check the User ID provided by your gym owner.');
     }
@@ -704,32 +698,6 @@ export const MemberApp: React.FC = () => {
             >
               Login with Credentials
             </button>
-
-            {/* Quick Registered Accounts Autofill */}
-            <div className="pt-2">
-              <span className="text-[10px] font-bold text-graphite-muted block mb-1.5 uppercase tracking-wider">
-                Quick Select (Admin Created Accounts)
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: 'Rahul Sharma', id: 'GYM0341', email: 'rahul.sharma@gmail.com' },
-                  { label: 'Priya Singh', id: 'GYM0342', email: 'priya.singh@gmail.com' },
-                  { label: 'Aman Verma', id: 'GYM0343', email: 'aman.verma@gmail.com' },
-                ].map((demo) => (
-                  <button
-                    key={demo.id}
-                    type="button"
-                    onClick={() => {
-                      setLoginEmail(demo.email);
-                      setLoginPassword('password123');
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-cloud-grey/70 hover:bg-yellow-soft hover:text-graphite border border-cloud-border text-[10px] font-bold text-graphite-muted transition-all"
-                  >
-                    {demo.label} ({demo.id})
-                  </button>
-                ))}
-              </div>
-            </div>
           </form>
 
         </div>

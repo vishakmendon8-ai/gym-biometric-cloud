@@ -140,7 +140,7 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>(INITIAL_ACCESS_LOGS);
   const [payments, setPayments] = useState<PaymentRecord[]>(INITIAL_PAYMENTS);
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
-  const [selectedMember, setSelectedMember] = useState<Member | null>(INITIAL_MEMBERS[0]);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
   const [biometricDevices, setBiometricDevices] = useState<BiometricDevice[]>([]);
   const [biometricConnectors, setBiometricConnectors] = useState<BiometricConnectorStatus[]>([]);
@@ -180,13 +180,11 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             setFirebaseConnected(true);
             setFirestoreError(null);
-            if (!snap.empty) {
-              const liveMembers = snap.docs.map((d) => ({
-                id: d.id,
-                ...(d.data() as Omit<Member, 'id'>),
-              }));
-              setMembers(liveMembers);
-            }
+            const liveMembers = snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<Member, 'id'>),
+            }));
+            setMembers(liveMembers);
           },
           (err) => handleSnapshotError('members', err)
         )
@@ -199,13 +197,11 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             setFirebaseConnected(true);
             setFirestoreError(null);
-            if (!snap.empty) {
-              const liveAttendance = snap.docs.map((d) => ({
-                id: d.id,
-                ...(d.data() as Omit<AttendanceRecord, 'id'>),
-              }));
-              setAttendance(liveAttendance);
-            }
+            const liveAttendance = snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<AttendanceRecord, 'id'>),
+            }));
+            setAttendance(liveAttendance);
           },
           (err) => {
             // Fallback without orderBy if existing seeded docs lack createdAt

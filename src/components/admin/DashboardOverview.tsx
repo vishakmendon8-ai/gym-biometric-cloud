@@ -32,12 +32,15 @@ export const DashboardOverview: React.FC = () => {
   const [trendRange, setTrendRange] = useState('Last 6 Months');
 
   // Dynamic calculations based on real data
-  const totalMembersCount = members.length > 0 ? 342 : 0;
-  const activeMembersCount = members.filter(m => m.status === 'active').length > 0 ? 281 : 0;
-  const expiredMembersCount = members.filter(m => m.status === 'expired').length > 0 ? 37 : 0;
-  const expiringSoonCount = members.filter(m => m.status === 'expiring').length > 0 ? 24 : 0;
-  const todayAttendanceCount = 196;
-  const monthlyRevenueStr = '₹4,92,000';
+  const totalMembersCount = members.length;
+  const activeMembersCount = members.filter(m => m.status === 'active').length;
+  const expiredMembersCount = members.filter(m => m.status === 'expired').length;
+  const expiringSoonCount = members.filter(m => m.status === 'expiring').length;
+  const todayAttendanceCount = attendance.length;
+  const totalRevenue = payments
+    .filter((p) => p.status === 'completed')
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  const monthlyRevenueStr = `₹${totalRevenue.toLocaleString('en-IN')}`;
 
   // SVG Chart Spline points for Jul - Dec
   // 0, 50, 100, 150, 200, 250, 300
@@ -372,74 +375,43 @@ export const DashboardOverview: React.FC = () => {
           </div>
 
           <div className="space-y-2.5">
-            {/* Member 1: Rahul Sharma */}
-            <div className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80"
-                  alt="Rahul Sharma"
-                  className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
-                />
-                <div>
-                  <p className="text-xs font-black text-[#252A30] leading-tight">Rahul Sharma</p>
-                  <p className="text-[10px] font-mono text-[#84909A] font-bold">GYM0341</p>
+            {members.length === 0 ? (
+              <div className="p-6 rounded-xl bg-[#F5F6F2]/70 border border-dashed border-[#DCE3E8] text-center space-y-2">
+                <p className="text-xs font-bold text-[#252A30]">No members enrolled yet</p>
+                <p className="text-[11px] text-[#84909A]">
+                  Click Enroll Member to create a User ID and Password for your first member.
+                </p>
+              </div>
+            ) : (
+              members.slice(0, 5).map((member) => (
+                <div
+                  key={member.id}
+                  className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={member.avatar}
+                      alt={member.name}
+                      className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
+                    />
+                    <div>
+                      <p className="text-xs font-black text-[#252A30] leading-tight">{member.name}</p>
+                      <p className="text-[10px] font-mono text-[#84909A] font-bold">
+                        ID: {member.loginUserId || member.biometricId || member.id}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="px-2.5 py-1 rounded-full bg-[#FFF8E7] text-[#252A30] border border-[#FFD447]/50 font-extrabold text-[10px]">
+                      {member.planName}
+                    </span>
+                    <span className="text-[11px] font-semibold text-[#84909A] min-w-[65px] text-right">
+                      {member.joinDate}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-full bg-[#FFF8E7] text-[#252A30] border border-[#FFD447]/50 font-extrabold text-[10px]">
-                  Monthly Plan
-                </span>
-                <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
-                  2 min ago
-                </span>
-              </div>
-            </div>
-
-            {/* Member 2: Priya Singh */}
-            <div className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80"
-                  alt="Priya Singh"
-                  className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
-                />
-                <div>
-                  <p className="text-xs font-black text-[#252A30] leading-tight">Priya Singh</p>
-                  <p className="text-[10px] font-mono text-[#84909A] font-bold">GYM0342</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-full bg-[#FFF8E7] text-[#252A30] border border-[#FFD447]/50 font-extrabold text-[10px]">
-                  Quarterly Plan
-                </span>
-                <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
-                  14 min ago
-                </span>
-              </div>
-            </div>
-
-            {/* Member 3: Aman Verma */}
-            <div className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80"
-                  alt="Aman Verma"
-                  className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
-                />
-                <div>
-                  <p className="text-xs font-black text-[#252A30] leading-tight">Aman Verma</p>
-                  <p className="text-[10px] font-mono text-[#84909A] font-bold">GYM0343</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-full bg-[#FFF8E7] text-[#252A30] border border-[#FFD447]/50 font-extrabold text-[10px]">
-                  Yearly Plan
-                </span>
-                <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
-                  28 min ago
-                </span>
-              </div>
-            </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -457,65 +429,44 @@ export const DashboardOverview: React.FC = () => {
           </div>
 
           <div className="space-y-2.5">
-            {/* Log 1: Rahul Sharma (Granted) */}
-            <div className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&auto=format&fit=crop&q=80"
-                  alt="Rahul Sharma"
-                  className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
-                />
-                <p className="text-xs font-black text-[#252A30]">Rahul Sharma</p>
+            {accessLogs.length === 0 ? (
+              <div className="p-6 rounded-xl bg-[#F5F6F2]/70 border border-dashed border-[#DCE3E8] text-center space-y-2">
+                <p className="text-xs font-bold text-[#252A30]">No access logs yet</p>
+                <p className="text-[11px] text-[#84909A]">
+                  Real fingerprint scans from your Secureye terminal will appear here automatically.
+                </p>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-full bg-[#EBF7EE] text-[#36A875] border border-[#36A875]/30 font-extrabold text-[10px]">
-                  Access Granted
-                </span>
-                <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
-                  10:24 AM
-                </span>
-              </div>
-            </div>
-
-            {/* Log 2: Ajay Kumar (Denied) */}
-            <div className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80"
-                  alt="Ajay Kumar"
-                  className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
-                />
-                <p className="text-xs font-black text-[#252A30]">Ajay Kumar</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-full bg-[#FDEEEE] text-[#DC5555] border border-[#DC5555]/30 font-extrabold text-[10px]">
-                  Access Denied
-                </span>
-                <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
-                  10:20 AM
-                </span>
-              </div>
-            </div>
-
-            {/* Log 3: Neha Patel (Granted) */}
-            <div className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all">
-              <div className="flex items-center gap-3">
-                <img
-                  src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80"
-                  alt="Neha Patel"
-                  className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
-                />
-                <p className="text-xs font-black text-[#252A30]">Neha Patel</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-full bg-[#EBF7EE] text-[#36A875] border border-[#36A875]/30 font-extrabold text-[10px]">
-                  Access Granted
-                </span>
-                <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
-                  10:18 AM
-                </span>
-              </div>
-            </div>
+            ) : (
+              accessLogs.slice(0, 5).map((log) => (
+                <div
+                  key={log.id}
+                  className="p-3 rounded-xl bg-[#F5F6F2]/70 hover:bg-[#F5F6F2] border border-[#DCE3E8]/60 flex items-center justify-between transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={log.avatar}
+                      alt={log.memberName}
+                      className="w-10 h-10 rounded-full object-cover border border-white shadow-xs"
+                    />
+                    <p className="text-xs font-black text-[#252A30]">{log.memberName}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`px-2.5 py-1 rounded-full font-extrabold text-[10px] border ${
+                        log.status === 'granted'
+                          ? 'bg-[#EBF7EE] text-[#36A875] border-[#36A875]/30'
+                          : 'bg-[#FDEEEE] text-[#DC5555] border-[#DC5555]/30'
+                      }`}
+                    >
+                      {log.status === 'granted' ? 'Access Granted' : 'Access Denied'}
+                    </span>
+                    <span className="text-[11px] font-semibold text-[#84909A] min-w-[55px] text-right">
+                      {log.time}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

@@ -43,7 +43,7 @@ export const AddMemberModal: React.FC = () => {
     .map((val) => (val && /^\d+$/.test(val.trim()) ? Number(val.trim()) : 0))
     .filter((n) => n > 0);
   const suggestedUserId = String(
-    existingNumericIds.length > 0 ? Math.max(...existingNumericIds) + 1 : members.length + 342
+    existingNumericIds.length > 0 ? Math.max(...existingNumericIds) + 1 : 101
   );
 
   // Reset form with fresh User ID + generated password when modal opens
