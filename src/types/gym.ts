@@ -2,12 +2,15 @@ export type MemberStatus = 'active' | 'expiring' | 'expired' | 'pending' | 'inac
 
 export interface Member {
   id: string;
+  loginUserId?: string;
   name: string;
   email: string;
   phone: string;
   password?: string;
+  age?: number;
   dob?: string;
   gender?: 'Male' | 'Female' | 'Other';
+  profileCompleted?: boolean;
   address?: string;
   avatar: string;
   planId: string;

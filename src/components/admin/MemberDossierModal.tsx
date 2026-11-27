@@ -134,16 +134,30 @@ export const MemberDossierModal: React.FC<MemberDossierModalProps> = ({ member, 
                 </h4>
                 <div className="grid grid-cols-2 gap-3 text-xs pt-1">
                   <div>
-                    <span className="text-graphite-muted block text-[11px]">Primary Email</span>
-                    <strong className="text-graphite">{member.email}</strong>
+                    <span className="text-graphite-muted block text-[11px]">Phone Number</span>
+                    <strong className="text-graphite">{member.phone || 'Pending member setup'}</strong>
                   </div>
                   <div>
-                    <span className="text-graphite-muted block text-[11px]">Mobile Phone</span>
-                    <strong className="text-graphite">{member.phone}</strong>
+                    <span className="text-graphite-muted block text-[11px]">Gmail / Email</span>
+                    <strong className="text-graphite">{member.email || 'Not provided (Optional)'}</strong>
                   </div>
                   <div>
-                    <span className="text-graphite-muted block text-[11px]">Emergency Contact</span>
-                    <strong className="text-graphite">{member.emergencyContact}</strong>
+                    <span className="text-graphite-muted block text-[11px]">Age &amp; Gender</span>
+                    <strong className="text-graphite">
+                      {member.age ? `${member.age} yrs` : member.dob || 'Pending'} • {member.gender || 'Pending'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-graphite-muted block text-[11px]">Login User ID / Password</span>
+                    <strong className="text-graphite font-mono">
+                      {member.loginUserId || member.biometricId || member.id} / {member.password || 'password123'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-graphite-muted block text-[11px]">Profile Status</span>
+                    <strong className={member.profileCompleted === false ? 'text-amber-600' : 'text-emerald-600'}>
+                      {member.profileCompleted === false ? 'Pending Member Completion' : 'Completed'}
+                    </strong>
                   </div>
                   <div>
                     <span className="text-graphite-muted block text-[11px]">Enrolled Since</span>

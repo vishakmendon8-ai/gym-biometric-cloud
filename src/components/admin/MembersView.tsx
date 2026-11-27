@@ -47,9 +47,14 @@ export const MembersView: React.FC<MembersViewProps> = ({ onOpenAddMember }) => 
   const [dossierMember, setDossierMember] = useState<Member | null>(null);
 
   const filteredMembers = members.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          member.biometricId.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      (member.name || '').toLowerCase().includes(q) ||
+      (member.email || '').toLowerCase().includes(q) ||
+      (member.phone || '').toLowerCase().includes(q) ||
+      (member.loginUserId || '').toLowerCase().includes(q) ||
+      (member.id || '').toLowerCase().includes(q) ||
+      (member.biometricId || '').toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -65,7 +70,7 @@ export const MembersView: React.FC<MembersViewProps> = ({ onOpenAddMember }) => 
           <Search className="w-4 h-4 text-graphite-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search member, email, or token..."
+            placeholder="Search member, User ID, phone, or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 text-xs rounded-input bg-white border border-cloud-border text-graphite placeholder:text-graphite-muted/60 focus:outline-none focus:border-yellow-sunshine focus:ring-1 focus:ring-yellow-sunshine transition-all"
@@ -120,6 +125,7 @@ export const MembersView: React.FC<MembersViewProps> = ({ onOpenAddMember }) => 
             <tbody className="divide-y divide-cloud-border/70">
               {filteredMembers.map((member) => {
                 const isSelected = selectedMember?.id === member.id;
+                const displayLoginId = member.loginUserId || member.biometricId || member.id;
                 return (
                   <tr
                     key={member.id}
@@ -139,12 +145,32 @@ export const MembersView: React.FC<MembersViewProps> = ({ onOpenAddMember }) => 
                           className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
                         />
                         <div>
-                          <div className="font-bold text-graphite text-xs">{member.name}</div>
-                          <div className="text-[11px] text-graphite-muted flex items-center gap-1">
-                            <Mail className="w-3 h-3 opacity-60" /> {member.email}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-graphite text-xs">{member.name}</span>
+                            {member.profileCompleted === false && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-[#FFF8E7] text-[#9A7400] border border-[#FFD447]/60">
+                                Profile Pending
+                              </span>
+                            )}
                           </div>
-                          <div className="text-[10px] font-mono text-graphite-muted/80 flex items-center gap-1 mt-0.5">
+                          <div className="text-[11px] text-graphite-muted flex items-center gap-1">
+                            {member.phone ? (
+                              <>
+                                <Phone className="w-3 h-3 opacity-60" /> {member.phone}
+                                {member.email ? ` • ${member.email}` : ''}
+                              </>
+                            ) : member.email ? (
+                              <>
+                                <Mail className="w-3 h-3 opacity-60" /> {member.email}
+                              </>
+                            ) : (
+                              <span className="italic opacity-75">Awaiting member app login</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] font-mono text-graphite-muted/80 flex items-center gap-1.5 mt-0.5">
                             <Key className="w-2.5 h-2.5 text-yellow-active" />
+                            <span>ID: {displayLoginId}</span>
+                            <span>•</span>
                             <span>Pass: {member.password || 'password123'}</span>
                           </div>
                         </div>

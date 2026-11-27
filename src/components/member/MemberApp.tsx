@@ -119,6 +119,7 @@ export const MemberApp: React.FC = () => {
     if (savedMemberId) {
       const existing = members.find(m => m.id === savedMemberId);
       if (existing) {
+        if (existing.profileCompleted === false) return 'profile-setup';
         return existing.status === 'pending' ? 'plans' : 'home';
       }
     }
@@ -155,6 +156,10 @@ export const MemberApp: React.FC = () => {
       if (savedMemberId) {
         const existing = members.find(m => m.id === savedMemberId);
         if (existing) {
+          if (existing.profileCompleted === false) {
+            setCurrentScreen('profile-setup');
+            return;
+          }
           setCurrentScreen(existing.status === 'pending' ? 'plans' : 'home');
           return;
         }
@@ -232,12 +237,14 @@ export const MemberApp: React.FC = () => {
   const nextMemberId = `MEM${10000 + members.length + 42}`;
 
   // ----------------------------------------------------
-  // Form States: Profile Setup (Screen 4)
+  // Form States: Profile Completion (Screen 4 — filled by member on first login)
   // ----------------------------------------------------
-  const [setupGender, setSetupGender] = useState<'Male' | 'Female' | 'Other'>('Male');
-  const [setupDob, setSetupDob] = useState('1996-08-14');
-  const [setupGoal, setSetupGoal] = useState('Muscle Building');
-  const [setupEmergency, setSetupEmergency] = useState('+91 98765 00112');
+  const [setupFullName, setSetupFullName] = useState('');
+  const [setupAge, setSetupAge] = useState('');
+  const [setupGender, setSetupGender] = useState<'Male' | 'Female'>('Male');
+  const [setupPhone, setSetupPhone] = useState('+91 ');
+  const [setupEmail, setSetupEmail] = useState('');
+  const [setupError, setSetupError] = useState('');
   const [setupAvatar, setSetupAvatar] = useState('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=faces&q=80');
 
   // ----------------------------------------------------
@@ -512,21 +519,35 @@ export const MemberApp: React.FC = () => {
     e.preventDefault();
     setLoginError('');
 
-    const searchKey = loginEmail.trim().toLowerCase();
-    const usernamePart = searchKey.includes('@') ? searchKey.split('@')[0] : searchKey;
+    const rawInput = loginEmail.trim();
+    const searchKey = rawInput.toLowerCase();
+    const normalizedNumeric = /^\d+$/.test(rawInput) ? String(Number(rawInput)) : searchKey;
 
-    const matched = members.find(
-      m => m.email.toLowerCase() === searchKey ||
-           m.id.toLowerCase() === searchKey ||
-           m.phone.includes(searchKey) ||
-           m.name.toLowerCase().includes(usernamePart) ||
-           m.email.toLowerCase().includes(usernamePart)
-    );
+    if (!searchKey) {
+      setLoginError('Please enter the User ID provided by your gym administrator.');
+      return;
+    }
+
+    const matched = members.find((m) => {
+      const loginId = (m.loginUserId || '').trim().toLowerCase();
+      const bioId = (m.biometricId || '').trim().toLowerCase();
+      const memberId = (m.id || '').trim().toLowerCase();
+      const email = (m.email || '').trim().toLowerCase();
+      const phone = (m.phone || '').trim();
+
+      return (
+        (loginId && (loginId === searchKey || loginId === normalizedNumeric)) ||
+        (bioId && (bioId === searchKey || bioId === normalizedNumeric)) ||
+        memberId === searchKey ||
+        (email && email === searchKey) ||
+        (phone && rawInput.length >= 6 && phone.includes(rawInput))
+      );
+    });
 
     if (matched) {
       const expectedPassword = matched.password || 'password123';
-      if (loginPassword && loginPassword !== expectedPassword && loginPassword !== 'password123') {
-        setLoginError('Invalid password. Please enter the password provided by your gym administrator.');
+      if (loginPassword.trim() !== expectedPassword) {
+        setLoginError('Invalid password. Please enter the exact password provided by your gym administrator.');
         return;
       }
 
@@ -535,7 +556,18 @@ export const MemberApp: React.FC = () => {
         localStorage.setItem('gympro_member_session', matched.id);
       }
 
-      // If pending approval/plan start, send directly to plan selection
+      // First-time login: member completes Full Name, Age, Gender, Phone & optional Gmail
+      if (matched.profileCompleted === false) {
+        setSetupFullName('');
+        setSetupAge(matched.age ? String(matched.age) : '');
+        setSetupGender(matched.gender === 'Female' ? 'Female' : 'Male');
+        setSetupPhone(matched.phone || '+91 ');
+        setSetupEmail(matched.email || '');
+        setSetupError('');
+        setCurrentScreen('profile-setup');
+        return;
+      }
+
       if (matched.status === 'pending') {
         setCurrentScreen('plans');
       } else {
@@ -548,7 +580,7 @@ export const MemberApp: React.FC = () => {
       }
       setCurrentScreen('home');
     } else {
-      setLoginError('Member account not found. Please verify your Email or Member ID provided by the gym owner.');
+      setLoginError('Account not found. Please check the User ID provided by your gym owner.');
     }
   };
 
@@ -576,7 +608,7 @@ export const MemberApp: React.FC = () => {
           <div className="text-center mb-5">
             <h2 className="text-xl font-black text-graphite tracking-tight">Member Sign In</h2>
             <p className="text-xs text-graphite-muted font-medium mt-1">
-              Enter the credentials provided by your gym administrator / owner
+              Log in using the User ID &amp; Password given by your gym admin
             </p>
           </div>
 
@@ -584,9 +616,9 @@ export const MemberApp: React.FC = () => {
           <div className="mb-4 p-3 rounded-2xl bg-[#FFF8E7] border border-[#FFD447]/50 text-xs text-[#252A30] flex items-start gap-2.5">
             <ShieldCheck className="w-4 h-4 text-[#252A30] shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold leading-tight">Official Club Account</p>
+              <p className="font-bold leading-tight">First-Time Member Login</p>
               <p className="text-[11px] text-[#84909A] mt-0.5 leading-snug">
-                Your Member ID and login password are created directly by the gym owner when registering your profile.
+                Enter the User ID and Password created by your gym admin. You will complete your profile right after signing in.
               </p>
             </div>
           </div>
@@ -599,7 +631,7 @@ export const MemberApp: React.FC = () => {
           )}
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {/* Mobile / Email */}
+            {/* User ID */}
             <div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-graphite-muted">
@@ -608,7 +640,7 @@ export const MemberApp: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Mobile / Email / Member ID"
+                  placeholder="User ID (e.g. 349) or Member ID"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-cloud-grey/50 border border-transparent focus:border-yellow-sunshine focus:bg-white text-base sm:text-sm font-medium text-graphite outline-none transition-all"
@@ -991,67 +1023,114 @@ export const MemberApp: React.FC = () => {
   );
 
   // ----------------------------------------------------
-  // SCREEN 4: Personal Profile Setup Screen
+  // SCREEN 4: Member Profile Completion Screen (after first login)
   // ----------------------------------------------------
-  const handleProfileSetupSave = () => {
+  const handleProfileSetupSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanedName = setupFullName.trim();
+    const parsedAge = Number(setupAge);
+    const cleanedPhone = setupPhone.trim();
+    const cleanedEmail = setupEmail.trim().toLowerCase();
+
+    if (!cleanedName || cleanedName.length < 2) {
+      setSetupError('Please enter your full name.');
+      return;
+    }
+    if (!Number.isFinite(parsedAge) || parsedAge < 10 || parsedAge > 100) {
+      setSetupError('Please enter a valid age (between 10 and 100).');
+      return;
+    }
+    if (!cleanedPhone || cleanedPhone.replace(/\D/g, '').length < 10) {
+      setSetupError('Please enter a valid 10-digit phone number.');
+      return;
+    }
+    if (cleanedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanedEmail)) {
+      setSetupError('Please enter a valid Gmail / email address or leave it blank.');
+      return;
+    }
+
+    setSetupError('');
+
     const updated: Member = {
       ...currentMember,
+      name: cleanedName,
+      age: Math.round(parsedAge),
       gender: setupGender,
-      dob: setupDob,
+      phone: cleanedPhone,
+      email: cleanedEmail,
       avatar: setupAvatar,
-      emergencyContact: setupEmergency,
-      healthNotes: `Goal: ${setupGoal}`
+      profileCompleted: true,
     };
+
     setCurrentMember(updated);
-    updateMember(currentMember.id, updated).catch(() => {});
-    setCurrentScreen('plans');
+    await updateMember(currentMember.id, {
+      name: updated.name,
+      age: updated.age,
+      gender: updated.gender,
+      phone: updated.phone,
+      email: updated.email,
+      avatar: updated.avatar,
+      profileCompleted: true,
+    }).catch(() => {});
+
+    setCurrentScreen(updated.status === 'pending' ? 'plans' : 'home');
   };
 
   const renderProfileSetupScreen = () => (
     <div className="flex-1 flex flex-col justify-between bg-cloud p-4 min-h-screen pb-16">
-      <div className="space-y-4">
+      <form onSubmit={handleProfileSetupSave} className="space-y-4">
         {/* Top Header */}
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            onClick={() => setCurrentScreen('register')}
-            className="w-8 h-8 rounded-full bg-white border border-cloud-border flex items-center justify-center text-graphite shadow-xs"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <h2 className="text-base font-black text-graphite leading-tight">Personal Profile Setup</h2>
-            <p className="text-[11px] text-graphite-muted">Step 2 of 4 • Set your preferences</p>
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('gympro_member_session');
+                }
+                setCurrentScreen('login');
+              }}
+              className="w-8 h-8 rounded-full bg-white border border-cloud-border flex items-center justify-center text-graphite shadow-xs"
+              title="Back to Sign In"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div>
+              <h2 className="text-base font-black text-graphite leading-tight">Complete Your Profile</h2>
+              <p className="text-[11px] text-graphite-muted">
+                User ID: <span className="font-mono font-bold text-graphite">{currentMember.loginUserId || currentMember.biometricId || currentMember.id}</span> • Fill details to activate app
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Avatar Selection Card */}
-        <div className="bg-white rounded-3xl p-5 border border-cloud-border shadow-xs text-center">
-          <div className="w-20 h-20 rounded-full border-4 border-yellow-sunshine mx-auto overflow-hidden mb-3 shadow-md">
+        <div className="bg-white rounded-3xl p-4 border border-cloud-border shadow-xs text-center">
+          <div className="w-16 h-16 rounded-full border-4 border-yellow-sunshine mx-auto overflow-hidden mb-2.5 shadow-md">
             <img src={setupAvatar} alt="Avatar" className="w-full h-full object-cover" />
           </div>
-          <span className="text-xs font-bold text-graphite block mb-2">Choose Athlete Profile Picture</span>
+          <span className="text-[11px] font-bold text-graphite block mb-2">Profile Picture</span>
           <div className="flex justify-center gap-2.5">
             {[
-              { id: 'av1', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=faces&q=80', label: 'Vishak' },
-              { id: 'av2', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&fit=crop&crop=faces&q=80', label: 'Athlete M' },
-              { id: 'av3', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&fit=crop&crop=faces&q=80', label: 'Athlete F' },
-              { id: 'av4', url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=300&fit=crop&crop=faces&q=80', label: 'Trainer' }
+              { id: 'av1', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=faces&q=80', label: 'Male 1' },
+              { id: 'av2', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&fit=crop&crop=faces&q=80', label: 'Male 2' },
+              { id: 'av3', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&fit=crop&crop=faces&q=80', label: 'Female 1' },
+              { id: 'av4', url: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=300&fit=crop&crop=faces&q=80', label: 'Athlete' }
             ].map((preset) => (
               <button
                 key={preset.id}
                 type="button"
                 onClick={() => setSetupAvatar(preset.url)}
-                className={`w-11 h-11 rounded-full overflow-hidden border-2 transition-all bg-cloud-grey relative ${
+                className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all bg-cloud-grey relative ${
                   setupAvatar === preset.url ? 'border-yellow-sunshine scale-110 shadow-sm ring-2 ring-yellow-sunshine/40' : 'border-cloud-border opacity-70 hover:opacity-100'
                 }`}
                 title={preset.label}
               >
-                <img 
-                  src={preset.url} 
-                  alt={preset.label} 
-                  className="w-full h-full object-cover" 
+                <img
+                  src={preset.url}
+                  alt={preset.label}
+                  className="w-full h-full object-cover"
                   onError={(e) => {
-                    // Fallback to stylized SVG avatar if network fails
                     (e.target as HTMLElement).style.display = 'none';
                   }}
                 />
@@ -1060,88 +1139,138 @@ export const MemberApp: React.FC = () => {
           </div>
         </div>
 
-        {/* Details Form Card */}
+        {setupError && (
+          <div className="p-3 rounded-xl bg-status-error/10 border border-status-error/25 text-status-error text-xs font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{setupError}</span>
+          </div>
+        )}
+
+        {/* Member Details Form Card */}
         <div className="bg-white rounded-3xl p-5 border border-cloud-border shadow-xs space-y-4">
-          {/* Gender */}
+          {/* Full Name */}
           <div>
-            <label className="text-xs font-bold text-graphite block mb-1.5">Gender</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['Male', 'Female', 'Other'] as const).map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setSetupGender(g)}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all border ${
-                    setupGender === g
-                      ? 'bg-yellow-sunshine border-yellow-sunshine text-graphite shadow-xs'
-                      : 'bg-cloud-grey/40 border-cloud-border text-graphite-muted'
-                  }`}
-                >
-                  {g}
-                </button>
-              ))}
+            <label className="text-xs font-bold text-graphite block mb-1.5">Full Name *</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-graphite-muted">
+                <User className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                required
+                value={setupFullName}
+                onChange={(e) => {
+                  setSetupFullName(e.target.value);
+                  if (setupError) setSetupError('');
+                }}
+                placeholder="Enter your full name"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-cloud-grey/50 border border-cloud-border text-sm font-semibold text-graphite outline-none focus:border-yellow-sunshine focus:bg-white transition-all"
+              />
             </div>
           </div>
 
-          {/* Date of Birth */}
-          <div>
-            <label className="text-xs font-bold text-graphite block mb-1.5">Date of Birth</label>
-            <input
-              type="date"
-              value={setupDob}
-              onChange={(e) => setSetupDob(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-cloud-grey/50 border border-cloud-border text-xs font-medium text-graphite outline-none focus:border-yellow-sunshine"
-            />
-          </div>
+          {/* Age & Gender */}
+          <div className="grid grid-cols-12 gap-3">
+            <div className="col-span-4">
+              <label className="text-xs font-bold text-graphite block mb-1.5">Age *</label>
+              <input
+                type="number"
+                required
+                min={10}
+                max={100}
+                inputMode="numeric"
+                value={setupAge}
+                onChange={(e) => {
+                  setSetupAge(e.target.value);
+                  if (setupError) setSetupError('');
+                }}
+                placeholder="e.g. 24"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-cloud-grey/50 border border-cloud-border text-sm font-semibold text-graphite outline-none focus:border-yellow-sunshine focus:bg-white transition-all"
+              />
+            </div>
 
-          {/* Fitness Goals */}
-          <div>
-            <label className="text-xs font-bold text-graphite block mb-1.5">Primary Fitness Goal</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                'Muscle Building',
-                'Fat Loss & Tone',
-                'Strength & Power',
-                'General Fitness'
-              ].map((goal) => (
-                <button
-                  key={goal}
-                  type="button"
-                  onClick={() => setSetupGoal(goal)}
-                  className={`p-2.5 rounded-xl text-xs font-bold text-left transition-all border ${
-                    setupGoal === goal
-                      ? 'bg-yellow-sunshine/25 border-yellow-sunshine text-graphite font-black'
-                      : 'bg-cloud-grey/40 border-cloud-border text-graphite-muted'
-                  }`}
-                >
-                  {goal}
-                </button>
-              ))}
+            <div className="col-span-8">
+              <label className="text-xs font-bold text-graphite block mb-1.5">Gender *</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['Male', 'Female'] as const).map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => {
+                      setSetupGender(g);
+                      if (g === 'Female' && setupAvatar.includes('1507003211169')) {
+                        setSetupAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&fit=crop&crop=faces&q=80');
+                      } else if (g === 'Male' && setupAvatar.includes('1534528741775')) {
+                        setSetupAvatar('https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&fit=crop&crop=faces&q=80');
+                      }
+                    }}
+                    className={`py-2.5 rounded-xl text-xs font-black transition-all border ${
+                      setupGender === g
+                        ? 'bg-yellow-sunshine border-yellow-sunshine text-graphite shadow-xs'
+                        : 'bg-cloud-grey/40 border-cloud-border text-graphite-muted'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Emergency Contact */}
+          {/* Phone Number */}
           <div>
-            <label className="text-xs font-bold text-graphite block mb-1.5">Emergency Contact Number</label>
-            <input
-              type="tel"
-              value={setupEmergency}
-              onChange={(e) => setSetupEmergency(e.target.value)}
-              placeholder="+91 98765 00000"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-cloud-grey/50 border border-cloud-border text-xs font-medium text-graphite outline-none focus:border-yellow-sunshine"
-            />
+            <label className="text-xs font-bold text-graphite block mb-1.5">Phone Number *</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-graphite-muted">
+                <Phone className="w-4 h-4" />
+              </div>
+              <input
+                type="tel"
+                required
+                value={setupPhone}
+                onChange={(e) => {
+                  setSetupPhone(e.target.value);
+                  if (setupError) setSetupError('');
+                }}
+                placeholder="+91 98765 43210"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-cloud-grey/50 border border-cloud-border text-sm font-semibold text-graphite outline-none focus:border-yellow-sunshine focus:bg-white transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Gmail (Optional) */}
+          <div>
+            <label className="text-xs font-bold text-graphite block mb-1.5">
+              Gmail / Email <span className="text-graphite-muted font-medium">(Optional)</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-graphite-muted">
+                <Mail className="w-4 h-4" />
+              </div>
+              <input
+                type="email"
+                value={setupEmail}
+                onChange={(e) => {
+                  setSetupEmail(e.target.value);
+                  if (setupError) setSetupError('');
+                }}
+                placeholder="yourname@gmail.com (optional)"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-cloud-grey/50 border border-cloud-border text-sm font-medium text-graphite outline-none focus:border-yellow-sunshine focus:bg-white transition-all"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Action Button */}
+        {/* Complete Profile Action Button */}
         <button
-          onClick={handleProfileSetupSave}
+          type="submit"
           className="w-full py-3.5 rounded-2xl bg-yellow-sunshine hover:bg-yellow-hover text-graphite font-black text-xs sm:text-sm shadow-yellow-btn transition-all active:scale-[0.99] flex items-center justify-center gap-2"
         >
-          <span>Save & Select Plan</span>
+          <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+          <span>Complete Profile</span>
           <ArrowRight className="w-4 h-4 stroke-[2.5]" />
         </button>
-      </div>
+      </form>
     </div>
   );
 
