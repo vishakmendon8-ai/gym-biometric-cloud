@@ -881,15 +881,15 @@ export const BiometricView: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block font-bold text-[#252A30] mb-1">
-                    Official Secureye Cloud API URL (Provided by Vendor)
+                  <label className="block font-bold text-[#252A30] mb-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-[#84909A]" />
+                    <span>Built-In Cloud Server URL (Locked)</span>
                   </label>
                   <input
                     type="url"
-                    placeholder="Enter official Secureye / ONtime Cloud API endpoint"
+                    readOnly
                     value={cloudApiUrl}
-                    onChange={(e) => setCloudApiUrl(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#DCE3E8] font-mono text-xs"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white/70 border border-[#DCE3E8] font-mono text-xs text-[#5A646E] cursor-not-allowed select-all"
                   />
                 </div>
                 <div>

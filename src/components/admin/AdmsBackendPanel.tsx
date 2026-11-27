@@ -17,10 +17,10 @@ import {
   Copy,
   Database,
   Fingerprint,
+  Lock,
   Plus,
   RefreshCw,
   Server,
-  Settings2,
   Terminal,
   Wifi,
   WifiOff,
@@ -33,9 +33,11 @@ function fmtTime(iso?: string | null) {
 }
 
 export const AdmsBackendPanel: React.FC = () => {
-  const [serverUrl, setServerUrl] = useState<string>(BIOMETRIC_CONFIG.serverUrl);
-  const [apiToken, setApiToken] = useState<string>(BIOMETRIC_CONFIG.apiToken);
-  const [showServerOverride, setShowServerOverride] = useState(false);
+  // Strictly locked to built-in app configuration — admins cannot edit server URL or API secret
+  const serverUrl = BIOMETRIC_CONFIG.serverUrl;
+  const apiToken = BIOMETRIC_CONFIG.apiToken;
+  const derivedWssUrl = BIOMETRIC_CONFIG.wsUrl;
+
   const [copiedWss, setCopiedWss] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -62,12 +64,6 @@ export const AdmsBackendPanel: React.FC = () => {
   const [regSaving, setRegSaving] = useState(false);
   const [regMsg, setRegMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const derivedWssUrl = `${serverUrl
-    .trim()
-    .replace(/\/+$/, '')
-    .replace(/^https:\/\//i, 'wss://')
-    .replace(/^http:\/\//i, 'ws://')}/biometric`;
-
   const handleCopyWss = async () => {
     try {
       await navigator.clipboard.writeText(derivedWssUrl);
@@ -78,8 +74,8 @@ export const AdmsBackendPanel: React.FC = () => {
     }
   };
 
-  const loadAll = async (targetUrl = serverUrl) => {
-    const cleaned = targetUrl.trim();
+  const loadAll = async () => {
+    const cleaned = serverUrl.trim();
     if (!cleaned) return;
     setLoading(true);
     setErrorMsg(null);
@@ -160,16 +156,20 @@ export const AdmsBackendPanel: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Built-in Cloud Backend Status Bar (Developer Maintenance Only) */}
+      {/* Built-in Cloud Backend Status Bar (Strictly Locked — Admin Cannot Edit) */}
       <div className="bg-white rounded-2xl p-5 border border-[#DCE3E8] shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E9ECEF]">
           <div>
             <h3 className="text-sm font-black text-[#252A30] flex items-center gap-2">
               <Server className="w-4 h-4 text-[#E5B82A]" />
               <span>Built-In Biometric Cloud Server</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F5F6F2] border border-[#DCE3E8] text-[10px] font-bold text-[#5A646E]">
+                <Lock className="w-2.5 h-2.5" />
+                Locked
+              </span>
             </h3>
             <p className="text-xs text-[#84909A]">
-              Pre-configured inside the app (<code className="text-[#252A30]">{serverUrl}</code>) — clients never need to fill in or maintain server details.
+              Pre-configured and locked inside the app — gym admins cannot edit or accidentally break the server settings.
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -194,14 +194,26 @@ export const AdmsBackendPanel: React.FC = () => {
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setShowServerOverride((v) => !v)}
-              className="py-1.5 px-2.5 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] text-[#5A646E] hover:text-[#252A30] font-bold text-[11px] flex items-center gap-1"
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              <span>{showServerOverride ? 'Hide Override' : 'Override URL'}</span>
-            </button>
+          </div>
+        </div>
+
+        {/* Locked Read-Only Configuration Summary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="p-3 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8]">
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#84909A] mb-1">
+              <Lock className="w-3 h-3" />
+              Cloud Service URL (Read-Only)
+            </span>
+            <p className="font-mono font-bold text-[#252A30] select-all truncate">{serverUrl}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8]">
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#84909A] mb-1">
+              <Lock className="w-3 h-3" />
+              API Secret (System Managed)
+            </span>
+            <p className="font-mono font-bold text-[#5A646E]">
+              {apiToken ? '•••••••••••••••• (Configured)' : 'Managed via Server Environment'}
+            </p>
           </div>
         </div>
 
@@ -209,7 +221,7 @@ export const AdmsBackendPanel: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-[#252A30] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-wider text-[#FFD447]">
-              One-Time Hardware Installer Endpoint (WSS)
+              Locked Hardware WebSocket Endpoint (WSS)
             </p>
             <p className="font-mono text-xs text-white/95 truncate mt-0.5">{derivedWssUrl}</p>
           </div>
@@ -222,44 +234,6 @@ export const AdmsBackendPanel: React.FC = () => {
             <span>{copiedWss ? 'Copied!' : 'Copy WSS URL'}</span>
           </button>
         </div>
-
-        {/* Optional Developer Override Fields (Collapsed by default) */}
-        {showServerOverride && (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs pt-1">
-            <div className="md:col-span-6">
-              <label className="block font-bold text-[#252A30] mb-1">Override Backend URL (Temporary)</label>
-              <input
-                type="url"
-                placeholder="https://dream-gym-1.onrender.com"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] font-mono font-bold text-[#252A30] focus:outline-none focus:border-[#FFD447]"
-              />
-            </div>
-            <div className="md:col-span-4">
-              <label className="block font-bold text-[#252A30] mb-1">
-                API Secret (Set via VITE_BIOMETRIC_API_SECRET)
-              </label>
-              <input
-                type="password"
-                placeholder="Configured via env var"
-                value={apiToken}
-                onChange={(e) => setApiToken(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] font-mono text-[#252A30] focus:outline-none focus:border-[#FFD447]"
-              />
-            </div>
-            <div className="md:col-span-2 flex items-end">
-              <button
-                onClick={() => loadAll()}
-                disabled={loading}
-                className="w-full py-2 px-3 rounded-xl bg-[#252A30] text-[#FFD447] font-black text-xs flex items-center justify-center gap-1.5 hover:bg-[#313740] transition-all disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                <span>Apply</span>
-              </button>
-            </div>
-          </div>
-        )}
 
         {errorMsg && (
           <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/30 text-xs font-semibold text-[#DC5555] flex items-start gap-2">
