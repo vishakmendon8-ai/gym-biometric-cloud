@@ -172,18 +172,35 @@ export const GymProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
+    const LEGACY_DUMMY_EMAILS = new Set([
+      'rahul.sharma@gmail.com',
+      'priya.singh@outlook.com',
+      'aman.verma@techcorp.in',
+      'ajay.kumar@fitness.in',
+      'neha.patel@designstudio.com',
+      'rohan.gupta@venture.io',
+      'ananya.desai@startup.in',
+      'vikram.m@finance.org',
+    ]);
+
     try {
-      // 1. Live Members
+      // 1. Live Members (also auto-purges legacy dummy seed records if still in Firestore)
       unsubscribers.push(
         onSnapshot(
           collection(db, 'members'),
           (snap) => {
             setFirebaseConnected(true);
             setFirestoreError(null);
-            const liveMembers = snap.docs.map((d) => ({
-              id: d.id,
-              ...(d.data() as Omit<Member, 'id'>),
-            }));
+            const liveMembers: Member[] = [];
+            snap.docs.forEach((d) => {
+              const data = d.data() as Omit<Member, 'id'>;
+              const emailLower = (data.email || '').trim().toLowerCase();
+              if (LEGACY_DUMMY_EMAILS.has(emailLower)) {
+                deleteDoc(doc(db, 'members', d.id)).catch(() => {});
+                return;
+              }
+              liveMembers.push({ id: d.id, ...data });
+            });
             setMembers(liveMembers);
           },
           (err) => handleSnapshotError('members', err)
