@@ -252,53 +252,65 @@ export const DashboardOverview: React.FC = () => {
             <p className="text-[11px] text-[#84909A] font-medium">Breakdown by active membership tiers</p>
           </div>
 
-          <div className="flex items-center justify-between gap-4 py-2 my-auto">
-            {/* Donut Chart SVG */}
-            <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
-              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                {/* Background Ring */}
-                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#E9ECEF" strokeWidth="14" />
-                
-                {/* Yearly: 8% (Circumference = 2 * PI * 38 = 238.76) */}
-                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#FFE79A" strokeWidth="14" strokeDasharray="238.76" strokeDashoffset="0" />
-                
-                {/* Half-Yearly: 12% */}
-                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#CBD5E1" strokeWidth="14" strokeDasharray="238.76" strokeDashoffset="19.1" />
+          {(() => {
+            const total = members.length;
+            const monthlyCount = members.filter((m) => m.planId === 'plan-monthly').length;
+            const quarterlyCount = members.filter((m) => m.planId === 'plan-quarterly').length;
+            const halfYearlyCount = members.filter((m) => m.planId === 'plan-half-yearly').length;
+            const yearlyCount = members.filter((m) => m.planId === 'plan-yearly').length;
+            const pct = (c: number) => (total > 0 ? Math.round((c / total) * 100) : 0);
+            const circumference = 238.76;
+            const mDash = total > 0 ? (monthlyCount / total) * circumference : 0;
+            const qDash = total > 0 ? (quarterlyCount / total) * circumference : 0;
+            const hDash = total > 0 ? (halfYearlyCount / total) * circumference : 0;
+            const yDash = total > 0 ? (yearlyCount / total) * circumference : 0;
 
-                {/* Quarterly: 24% */}
-                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#252A30" strokeWidth="14" strokeDasharray="238.76" strokeDashoffset="47.75" />
+            return (
+              <div className="flex items-center justify-between gap-4 py-2 my-auto">
+                {/* Donut Chart SVG */}
+                <div className="relative w-36 h-36 flex items-center justify-center shrink-0">
+                  <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                    {/* Background Ring */}
+                    <circle cx="50" cy="50" r="38" fill="transparent" stroke="#E9ECEF" strokeWidth="14" />
+                    {total > 0 && (
+                      <>
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#FFD447" strokeWidth="14" strokeDasharray={`${mDash} ${circumference}`} strokeDashoffset={0} />
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#252A30" strokeWidth="14" strokeDasharray={`${qDash} ${circumference}`} strokeDashoffset={-mDash} />
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#CBD5E1" strokeWidth="14" strokeDasharray={`${hDash} ${circumference}`} strokeDashoffset={-(mDash + qDash)} />
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#FFE79A" strokeWidth="14" strokeDasharray={`${yDash} ${circumference}`} strokeDashoffset={-(mDash + qDash + hDash)} />
+                      </>
+                    )}
+                  </svg>
 
-                {/* Monthly: 56% */}
-                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#FFD447" strokeWidth="14" strokeDasharray="238.76" strokeDashoffset="105.05" />
-              </svg>
+                  {/* Center Donut Label */}
+                  <div className="absolute text-center">
+                    <span className="text-lg font-black text-[#252A30] leading-none block">{totalMembersCount}</span>
+                    <span className="text-[10px] font-bold text-[#84909A] uppercase tracking-wider block mt-0.5">Members</span>
+                  </div>
+                </div>
 
-              {/* Center Donut Label */}
-              <div className="absolute text-center">
-                <span className="text-lg font-black text-[#252A30] leading-none block">342</span>
-                <span className="text-[10px] font-bold text-[#84909A] uppercase tracking-wider block mt-0.5">Members</span>
+                {/* Legend Breakdown */}
+                <div className="space-y-2 text-xs font-semibold">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FFD447] shrink-0" />
+                    <span className="text-[#252A30] text-[11px] font-bold">Monthly ({pct(monthlyCount)}%)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#252A30] shrink-0" />
+                    <span className="text-[#252A30] text-[11px] font-bold">Quarterly ({pct(quarterlyCount)}%)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#CBD5E1] shrink-0" />
+                    <span className="text-[#252A30] text-[11px] font-bold">Half-Yearly ({pct(halfYearlyCount)}%)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FFE79A] shrink-0" />
+                    <span className="text-[#252A30] text-[11px] font-bold">Yearly ({pct(yearlyCount)}%)</span>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Legend Breakdown */}
-            <div className="space-y-2 text-xs font-semibold">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FFD447] shrink-0" />
-                <span className="text-[#252A30] text-[11px] font-bold">Monthly (56%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#252A30] shrink-0" />
-                <span className="text-[#252A30] text-[11px] font-bold">Quarterly (24%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#CBD5E1] shrink-0" />
-                <span className="text-[#252A30] text-[11px] font-bold">Half-Yearly (12%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FFE79A] shrink-0" />
-                <span className="text-[#252A30] text-[11px] font-bold">Yearly (8%)</span>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* Card C: Quick Actions (3 Cols) */}
