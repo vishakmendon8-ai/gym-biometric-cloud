@@ -17,6 +17,7 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  Clock,
   Cloud,
   Cpu,
   Edit3,
@@ -31,6 +32,7 @@ import {
   Save,
   Search,
   Server,
+  Settings2,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -40,8 +42,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { AdmsBackendPanel } from './AdmsBackendPanel';
+import { BIOMETRIC_CONFIG } from '../../config/biometricConfig';
+import { AdmsServerHealth, fetchAdmsHealth } from '../../services/admsBackendClient';
 
-type SubTab = 'devices' | 'adms_server' | 'mapping' | 'diagnostics';
+type SubTab = 'mapping' | 'live_punches' | 'devices' | 'adms_server' | 'diagnostics';
 
 function formatTimestamp(iso?: string | null): string {
   if (!iso) return 'Never';
@@ -99,32 +103,38 @@ export const BiometricView: React.FC = () => {
     firestoreError,
   } = useGym();
 
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('devices');
+  // Default to the client-facing Member Fingerprint IDs view; technical server setup stays hidden unless unlocked
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('mapping');
+  const [showSystemSetup, setShowSystemSetup] = useState(false);
 
-  // Admin Firebase Auth inline sign-in state
+  // Admin Firebase Auth inline sign-in state (shown only in System Setup mode)
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Backend health probe state
+  // Real backend health probe state (built-in Render/ADMS cloud server + Firebase backend)
+  const [cloudServerHealth, setCloudServerHealth] = useState<AdmsServerHealth | null>(null);
   const [backendHealth, setBackendHealth] = useState<BackendHealthResult | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
 
-  // Device registration / configuration form state (Direct Cloud Only)
-  // Pre-filled with verified Secureye hardware values from device screen (no invented API URLs or credentials)
+  // Device registration / configuration form state (pre-filled from built-in BIOMETRIC_CONFIG)
   const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
-  const [deviceName, setDeviceName] = useState('Main Entrance Secureye Terminal');
-  const [deviceModel, setDeviceModel] = useState('Secureye P2P Biometric (Unidentified Model)');
-  const [serialNumber, setSerialNumber] = useState('102026020002110');
-  const [ipAddress, setIpAddress] = useState('192.168.1.101');
-  const [port, setPort] = useState('4000');
+  const [deviceName, setDeviceName] = useState<string>(BIOMETRIC_CONFIG.defaultTerminal.name);
+  const [deviceModel, setDeviceModel] = useState('Secureye P2P Biometric');
+  const [serialNumber, setSerialNumber] = useState<string>(
+    BIOMETRIC_CONFIG.defaultTerminal.serialNumber
+  );
+  const [ipAddress, setIpAddress] = useState<string>(BIOMETRIC_CONFIG.defaultTerminal.ipAddress);
+  const [port, setPort] = useState(String(BIOMETRIC_CONFIG.defaultTerminal.p2pPort));
   const [connectionMethod, setConnectionMethod] =
     useState<BiometricConnectionMethod>('secureye_cloud_webhook');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [p2pCloudId, setP2pCloudId] = useState('BD77B4BE-3765DCD');
-  const [cloudApiUrl, setCloudApiUrl] = useState('');
+  const [p2pCloudId, setP2pCloudId] = useState<string>(
+    BIOMETRIC_CONFIG.defaultTerminal.p2pCloudId
+  );
+  const [cloudApiUrl, setCloudApiUrl] = useState<string>(BIOMETRIC_CONFIG.serverUrl);
   const [pushIntervalSec, setPushIntervalSec] = useState('300');
 
   const [savingDevice, setSavingDevice] = useState(false);
@@ -148,8 +158,12 @@ export const BiometricView: React.FC = () => {
 
   const runHealthCheck = async () => {
     setCheckingHealth(true);
-    const res = await checkBiometricBackendHealth();
-    setBackendHealth(res);
+    const [cloudRes, fbRes] = await Promise.all([
+      fetchAdmsHealth(BIOMETRIC_CONFIG.serverUrl),
+      checkBiometricBackendHealth(),
+    ]);
+    setCloudServerHealth(cloudRes);
+    setBackendHealth(fbRes);
     setCheckingHealth(false);
   };
 
@@ -340,9 +354,20 @@ export const BiometricView: React.FC = () => {
       ? `${window.location.origin}/api/biometric/webhook`
       : 'https://gym001-50a97.web.app/api/biometric/webhook';
 
+  const isCloudOnline = Boolean(cloudServerHealth?.ok || backendHealth?.ok);
+  const handleToggleSystemSetup = () => {
+    setShowSystemSetup((prev) => {
+      const next = !prev;
+      if (!next && (activeSubTab === 'devices' || activeSubTab === 'adms_server' || activeSubTab === 'diagnostics')) {
+        setActiveSubTab('mapping');
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
-      {/* Top Status & Firebase Auth Strip */}
+      {/* Clean Client-Facing Biometric Status Strip (Zero Server Config Required) */}
       <div className="bg-white rounded-2xl p-4 border border-[#DCE3E8] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-[#252A30] text-[#FFD447] flex items-center justify-center shrink-0">
@@ -351,113 +376,131 @@ export const BiometricView: React.FC = () => {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-black text-[#252A30]">
-                Secureye Direct Cloud Biometric Integration
+                Biometric Attendance &amp; Fingerprint IDs
               </h2>
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
-                  backendHealth?.ok
+                  cloudServerHealth === null && backendHealth === null
+                    ? 'bg-[#F5F6F2] text-[#5A646E] border-[#DCE3E8]'
+                    : isCloudOnline
                     ? 'bg-[#36A875]/15 text-[#36A875] border-[#36A875]/30'
-                    : 'bg-[#DC5555]/10 text-[#DC5555] border-[#DC5555]/30'
+                    : 'bg-[#E5A024]/15 text-[#B57B14] border-[#E5A024]/30'
                 }`}
               >
-                {backendHealth === null
-                  ? 'Checking Backend...'
-                  : backendHealth.ok
-                  ? 'Firebase Backend Online'
-                  : 'Firebase Backend Unreachable'}
+                {cloudServerHealth === null && backendHealth === null
+                  ? 'Checking Server...'
+                  : isCloudOnline
+                  ? 'Cloud Sync Online'
+                  : 'Waiting for Server'}
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF8E7] text-[#8A6112] border border-[#FFD447]/50">
-                Direct Cloud Only (No PC) • Awaiting Official Secureye Cloud API
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#F5F6F2] text-[#5A646E] border border-[#DCE3E8] font-mono">
+                {BIOMETRIC_CONFIG.defaultTerminal.name} • SN: {BIOMETRIC_CONFIG.defaultTerminal.serialNumber}
               </span>
             </div>
             <p className="text-xs text-[#84909A] mt-0.5">
-              Zero local computer / zero local connector — devices remain Unverified/Disconnected until official Secureye Cloud API or direct push is verified.
+              Cloud connection is pre-configured inside the app. Just enroll members on the Secureye scanner and match their numeric User ID below.
             </p>
           </div>
         </div>
 
-        {/* Firebase Authentication Box */}
+        {/* Simple Client Actions + Hidden Developer System Setup Toggle */}
         <div className="flex items-center gap-2 flex-wrap">
-          {firebaseUser ? (
-            <div className="flex items-center gap-2.5 bg-[#F5F6F2] border border-[#DCE3E8] rounded-xl px-3 py-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#36A875] shrink-0" />
-              <div className="text-xs">
-                <p className="font-bold text-[#252A30] leading-tight">{firebaseUser.email}</p>
-                <p className="text-[10px] text-[#84909A]">Firebase Auth Verified</p>
-              </div>
-              <button
-                onClick={signOutAdmin}
-                className="ml-1 px-2.5 py-1 rounded-lg bg-white border border-[#DCE3E8] text-[11px] font-bold text-[#252A30] hover:border-[#DC5555] hover:text-[#DC5555] flex items-center gap-1 transition-all"
-              >
-                <LogOut className="w-3 h-3" />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleAdminSignIn} className="flex flex-wrap items-center gap-2">
-              <input
-                type="email"
-                required
-                placeholder="Firebase Admin email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                className="px-3 py-1.5 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] text-xs font-semibold text-[#252A30] w-44 focus:outline-none focus:border-[#FFD447]"
-              />
-              <input
-                type="password"
-                required
-                placeholder="Password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className="px-3 py-1.5 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] text-xs font-semibold text-[#252A30] w-32 focus:outline-none focus:border-[#FFD447]"
-              />
-              <button
-                type="submit"
-                disabled={authBusy}
-                className="px-3.5 py-1.5 rounded-xl bg-[#252A30] text-[#FFD447] text-xs font-black flex items-center gap-1.5 hover:bg-[#313740] transition-all disabled:opacity-50"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>{authBusy ? 'Signing In...' : 'Admin Sign In'}</span>
-              </button>
-            </form>
-          )}
+          <button
+            onClick={runHealthCheck}
+            disabled={checkingHealth}
+            className="px-3 py-1.5 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] hover:border-[#FFD447] text-xs font-bold text-[#252A30] flex items-center gap-1.5 transition-all"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${checkingHealth ? 'animate-spin' : ''}`} />
+            <span>{checkingHealth ? 'Checking...' : 'Refresh Status'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleSystemSetup}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
+              showSystemSetup
+                ? 'bg-[#252A30] text-[#FFD447] border-[#252A30]'
+                : 'bg-white text-[#84909A] border-[#DCE3E8] hover:text-[#252A30]'
+            }`}
+            title="Show or hide technical server & device configuration (installer/developer only)"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            <span>{showSystemSetup ? 'Hide System Setup' : 'System Setup'}</span>
+          </button>
         </div>
       </div>
 
-      {authError && (
+      {/* Developer-Only Firebase Admin Auth Bar (Visible only when System Setup is toggled open) */}
+      {showSystemSetup && (
+        <div className="bg-[#F5F6F2] rounded-2xl p-3.5 border border-[#DCE3E8] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="text-xs">
+            <p className="font-black text-[#252A30] flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-[#E5B82A]" />
+              <span>Installer / Developer Mode</span>
+            </p>
+            <p className="text-[11px] text-[#5A646E]">
+              Built-in Server: <code className="font-bold text-[#252A30]">{BIOMETRIC_CONFIG.serverUrl}</code> • Hidden from gym clients by default.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {firebaseUser ? (
+              <div className="flex items-center gap-2.5 bg-white border border-[#DCE3E8] rounded-xl px-3 py-1.5">
+                <ShieldCheck className="w-4 h-4 text-[#36A875] shrink-0" />
+                <div className="text-xs">
+                  <p className="font-bold text-[#252A30] leading-tight">{firebaseUser.email}</p>
+                  <p className="text-[10px] text-[#84909A]">Firebase Auth Verified</p>
+                </div>
+                <button
+                  onClick={signOutAdmin}
+                  className="ml-1 px-2.5 py-1 rounded-lg bg-[#F5F6F2] border border-[#DCE3E8] text-[11px] font-bold text-[#252A30] hover:border-[#DC5555] hover:text-[#DC5555] flex items-center gap-1 transition-all"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleAdminSignIn} className="flex flex-wrap items-center gap-2">
+                <input
+                  type="email"
+                  required
+                  placeholder="Firebase Admin email"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-[#DCE3E8] text-xs font-semibold text-[#252A30] w-44 focus:outline-none focus:border-[#FFD447]"
+                />
+                <input
+                  type="password"
+                  required
+                  placeholder="Password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-white border border-[#DCE3E8] text-xs font-semibold text-[#252A30] w-32 focus:outline-none focus:border-[#FFD447]"
+                />
+                <button
+                  type="submit"
+                  disabled={authBusy}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#252A30] text-[#FFD447] text-xs font-black flex items-center gap-1.5 hover:bg-[#313740] transition-all disabled:opacity-50"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>{authBusy ? 'Signing In...' : 'Admin Sign In'}</span>
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {authError && showSystemSetup && (
         <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/30 text-xs font-semibold text-[#DC5555] flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{authError}</span>
         </div>
       )}
 
-      {/* Sub-navigation Tabs */}
+      {/* Sub-navigation Tabs (Client sees only daily-use tabs; technical tabs appear only in System Setup) */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3E8] pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setActiveSubTab('devices')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'devices'
-                ? 'bg-[#252A30] text-[#FFD447] shadow-xs'
-                : 'bg-white text-[#5A646E] border border-[#DCE3E8] hover:border-[#FFD447]'
-            }`}
-          >
-            <Server className="w-3.5 h-3.5" />
-            <span>Biometric Devices ({biometricDevices.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('adms_server')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'adms_server'
-                ? 'bg-[#252A30] text-[#FFD447] shadow-xs'
-                : 'bg-white text-[#5A646E] border border-[#DCE3E8] hover:border-[#FFD447]'
-            }`}
-          >
-            <Cloud className="w-3.5 h-3.5" />
-            <span>ADMS Live Server</span>
-          </button>
-
           <button
             onClick={() => setActiveSubTab('mapping')}
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
@@ -467,46 +510,159 @@ export const BiometricView: React.FC = () => {
             }`}
           >
             <Link2 className="w-3.5 h-3.5" />
-            <span>Member User ID Mapping ({linkedMembersCount}/{members.length})</span>
+            <span>Member Fingerprint IDs ({linkedMembersCount}/{members.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('diagnostics')}
+            onClick={() => setActiveSubTab('live_punches')}
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              activeSubTab === 'diagnostics'
+              activeSubTab === 'live_punches'
                 ? 'bg-[#252A30] text-[#FFD447] shadow-xs'
                 : 'bg-white text-[#5A646E] border border-[#DCE3E8] hover:border-[#FFD447]'
             }`}
           >
-            <Activity className="w-3.5 h-3.5" />
-            <span>Diagnostics & Sync Logs</span>
-            {syncErrors.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-[#DC5555] text-white text-[10px] font-black">
-                {syncErrors.length}
-              </span>
-            )}
+            <Clock className="w-3.5 h-3.5" />
+            <span>Live Biometric Check-Ins ({realSecureyeAttendance.length})</span>
           </button>
-        </div>
 
-        <button
-          onClick={runHealthCheck}
-          disabled={checkingHealth}
-          className="px-3 py-1.5 rounded-xl bg-white border border-[#DCE3E8] hover:border-[#FFD447] text-xs font-bold text-[#252A30] flex items-center gap-1.5 transition-all"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${checkingHealth ? 'animate-spin' : ''}`} />
-          <span>Refresh Backend Status</span>
-        </button>
+          {showSystemSetup && (
+            <>
+              <button
+                onClick={() => setActiveSubTab('adms_server')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+                  activeSubTab === 'adms_server'
+                    ? 'bg-[#252A30] text-[#FFD447] shadow-xs'
+                    : 'bg-white text-[#5A646E] border border-[#DCE3E8] hover:border-[#FFD447]'
+                }`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>Cloud Server &amp; WSS</span>
+              </button>
+
+              <button
+                onClick={() => setActiveSubTab('devices')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+                  activeSubTab === 'devices'
+                    ? 'bg-[#252A30] text-[#FFD447] shadow-xs'
+                    : 'bg-white text-[#5A646E] border border-[#DCE3E8] hover:border-[#FFD447]'
+                }`}
+              >
+                <Server className="w-3.5 h-3.5" />
+                <span>Device Registry ({biometricDevices.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveSubTab('diagnostics')}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+                  activeSubTab === 'diagnostics'
+                    ? 'bg-[#252A30] text-[#FFD447] shadow-xs'
+                    : 'bg-white text-[#5A646E] border border-[#DCE3E8] hover:border-[#FFD447]'
+                }`}
+              >
+                <Activity className="w-3.5 h-3.5" />
+                <span>Diagnostics &amp; Sync Logs</span>
+                {syncErrors.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-[#DC5555] text-white text-[10px] font-black">
+                    {syncErrors.length}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* ================================================================= */}
-      {/* TAB: ADMS LIVE BACKEND SERVER (LIST DEVICES, PUNCHES & RAW LOGS)  */}
+      {/* TAB: LIVE BIOMETRIC CHECK-INS (CLIENT-FRIENDLY REAL ATTENDANCE)   */}
       {/* ================================================================= */}
-      {activeSubTab === 'adms_server' && <AdmsBackendPanel />}
+      {activeSubTab === 'live_punches' && (
+        <div className="bg-white rounded-2xl p-5 border border-[#DCE3E8] shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E9ECEF]">
+            <div>
+              <h3 className="text-sm font-black text-[#252A30]">
+                Live Fingerprint Attendance Feed
+              </h3>
+              <p className="text-xs text-[#84909A]">
+                Real check-ins received automatically from your Secureye terminal and matched to member profiles.
+              </p>
+            </div>
+            <span className="text-xs font-bold text-[#84909A]">
+              Last punch: {formatTimestamp(lastAttendanceReceived)}
+            </span>
+          </div>
+
+          {realSecureyeAttendance.length === 0 ? (
+            <div className="p-8 rounded-2xl bg-[#F5F6F2] border border-dashed border-[#DCE3E8] text-center space-y-2">
+              <Fingerprint className="w-8 h-8 text-[#84909A] mx-auto" />
+              <p className="text-xs font-black text-[#252A30]">
+                No fingerprint check-ins received yet
+              </p>
+              <p className="text-[11px] text-[#84909A] max-w-md mx-auto">
+                Once a member scans their enrolled finger on your Secureye machine, their attendance record and membership status will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#F5F6F2] border-b border-[#DCE3E8] text-[11px] font-bold text-[#84909A] uppercase tracking-wider">
+                    <th className="py-3 px-3">Member</th>
+                    <th className="py-3 px-3">Machine User ID</th>
+                    <th className="py-3 px-3">Date &amp; Time</th>
+                    <th className="py-3 px-3">Access Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E9ECEF]">
+                  {realSecureyeAttendance.map((att) => (
+                    <tr key={att.id} className="hover:bg-[#F5F6F2]/50">
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={att.avatar}
+                            alt={att.memberName}
+                            className="w-8 h-8 rounded-full object-cover border border-[#DCE3E8]"
+                          />
+                          <div>
+                            <p className="font-bold text-[#252A30]">{att.memberName}</p>
+                            <p className="text-[10px] font-mono text-[#84909A]">{att.memberId}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 font-mono font-bold text-[#252A30]">
+                        {att.biometricUserId || '—'}
+                      </td>
+                      <td className="py-3 px-3 text-[#252A30] font-semibold">
+                        {att.checkInDate} • {att.checkInTime}
+                      </td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                            att.status === 'granted'
+                              ? 'bg-[#36A875]/15 text-[#36A875] border-[#36A875]/30'
+                              : 'bg-[#DC5555]/15 text-[#DC5555] border-[#DC5555]/30'
+                          }`}
+                        >
+                          {att.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* TAB: BUILT-IN CLOUD SERVER & WSS (DEVELOPER / INSTALLER ONLY)     */}
+      {/* ================================================================= */}
+      {showSystemSetup && activeSubTab === 'adms_server' && <AdmsBackendPanel />}
 
       {/* ================================================================= */}
       {/* TAB 1: DEVICES & CONNECTION ARCHITECTURE                          */}
       {/* ================================================================= */}
-      {activeSubTab === 'devices' && (
+      {showSystemSetup && activeSubTab === 'devices' && (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
           {/* Left: Device Registration & Connection Form */}
           <div className="xl:col-span-5 bg-white rounded-2xl p-5 border border-[#DCE3E8] shadow-xs space-y-4">
@@ -1105,7 +1261,7 @@ export const BiometricView: React.FC = () => {
       {/* ================================================================= */}
       {/* TAB 3: DIAGNOSTICS & SYNCHRONIZATION LOGS                         */}
       {/* ================================================================= */}
-      {activeSubTab === 'diagnostics' && (
+      {showSystemSetup && activeSubTab === 'diagnostics' && (
         <div className="space-y-6">
           {/* 6 Required Real Diagnostic Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

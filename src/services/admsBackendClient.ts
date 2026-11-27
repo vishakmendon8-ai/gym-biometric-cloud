@@ -72,15 +72,31 @@ export async function fetchAdmsHealth(baseUrl: string): Promise<AdmsServerHealth
     const resp = await fetch(`${cleanBase(baseUrl)}/health`, {
       headers: { Accept: 'application/json' },
     });
-    const data = await resp.json();
+    const text = await resp.text();
+    let data: any = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { raw: text };
+    }
     if (!resp.ok) return { ok: false, error: data.error || `HTTP ${resp.status}` };
-    return data as AdmsServerHealth;
+    const healthy =
+      data.ok === true ||
+      data.status === 'ok' ||
+      data.status === 'online' ||
+      data.online === true ||
+      resp.ok;
+    return {
+      ...data,
+      ok: healthy,
+      service: data.service || 'Cloud Biometric Server',
+    } as AdmsServerHealth;
   } catch (err: any) {
     return {
       ok: false,
       error:
         err?.message ||
-        'Cannot reach ADMS backend server. Verify the URL, CORS, and that adms-server is running.',
+        'Cannot reach biometric cloud server. Verify the server is running and CORS is enabled.',
     };
   }
 }

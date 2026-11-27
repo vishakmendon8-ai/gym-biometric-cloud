@@ -10,23 +10,21 @@ import {
   fetchAdmsRawLogs,
   registerAdmsDevice,
 } from '../../services/admsBackendClient';
+import { BIOMETRIC_CONFIG } from '../../config/biometricConfig';
 import {
   AlertCircle,
   CheckCircle2,
+  Copy,
   Database,
   Fingerprint,
   Plus,
   RefreshCw,
   Server,
+  Settings2,
   Terminal,
   Wifi,
   WifiOff,
 } from 'lucide-react';
-
-const DEFAULT_ADMS_URL =
-  import.meta.env.VITE_ADMS_API_URL ||
-  (typeof window !== 'undefined' ? window.localStorage.getItem('gympro_adms_url') || '' : '') ||
-  'http://localhost:8080';
 
 function fmtTime(iso?: string | null) {
   if (!iso) return 'Never';
@@ -35,8 +33,10 @@ function fmtTime(iso?: string | null) {
 }
 
 export const AdmsBackendPanel: React.FC = () => {
-  const [serverUrl, setServerUrl] = useState(DEFAULT_ADMS_URL);
-  const [apiToken, setApiToken] = useState('');
+  const [serverUrl, setServerUrl] = useState<string>(BIOMETRIC_CONFIG.serverUrl);
+  const [apiToken, setApiToken] = useState<string>(BIOMETRIC_CONFIG.apiToken);
+  const [showServerOverride, setShowServerOverride] = useState(false);
+  const [copiedWss, setCopiedWss] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const [health, setHealth] = useState<AdmsServerHealth | null>(null);
@@ -53,12 +53,30 @@ export const AdmsBackendPanel: React.FC = () => {
   const [filterSn, setFilterSn] = useState('');
 
   // Quick register device on ADMS backend (status stays offline until real heartbeat)
-  const [regSn, setRegSn] = useState('102026020002110');
-  const [regName, setRegName] = useState('Secureye Main Entrance (BD77B4BE-3765DCD)');
+  const [regSn, setRegSn] = useState<string>(BIOMETRIC_CONFIG.defaultTerminal.serialNumber);
+  const [regName, setRegName] = useState<string>(
+    `${BIOMETRIC_CONFIG.defaultTerminal.name} (${BIOMETRIC_CONFIG.defaultTerminal.p2pCloudId})`
+  );
   const [regLocation, setRegLocation] = useState('Main Entrance');
-  const [regIp, setRegIp] = useState('192.168.1.101');
+  const [regIp, setRegIp] = useState<string>(BIOMETRIC_CONFIG.defaultTerminal.ipAddress);
   const [regSaving, setRegSaving] = useState(false);
   const [regMsg, setRegMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const derivedWssUrl = `${serverUrl
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/^https:\/\//i, 'wss://')
+    .replace(/^http:\/\//i, 'ws://')}/biometric`;
+
+  const handleCopyWss = async () => {
+    try {
+      await navigator.clipboard.writeText(derivedWssUrl);
+      setCopiedWss(true);
+      setTimeout(() => setCopiedWss(false), 2000);
+    } catch {
+      // Clipboard fallback ignored
+    }
+  };
 
   const loadAll = async (targetUrl = serverUrl) => {
     const cleaned = targetUrl.trim();
@@ -66,15 +84,11 @@ export const AdmsBackendPanel: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
 
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('gympro_adms_url', cleaned);
-    }
-
     const h = await fetchAdmsHealth(cleaned);
     setHealth(h);
 
     if (!h.ok) {
-      setErrorMsg(h.error || 'Unable to connect to ADMS backend server.');
+      setErrorMsg(h.error || 'Unable to connect to biometric backend server.');
       setDevices([]);
       setAttendance([]);
       setRawLogs([]);
@@ -98,9 +112,7 @@ export const AdmsBackendPanel: React.FC = () => {
       fetchAdmsRawLogs(cleaned, apiToken, 20),
     ]);
 
-    if (!devRes.ok) {
-      setErrorMsg(devRes.error || 'Failed to list devices from ADMS backend.');
-    } else {
+    if (devRes.ok) {
       setDevices(devRes.devices);
     }
 
@@ -139,7 +151,7 @@ export const AdmsBackendPanel: React.FC = () => {
     } else {
       setRegMsg({
         ok: true,
-        text: `Device SN ${regSn.trim()} registered as OFFLINE on ADMS backend. It will automatically switch to ONLINE when the physical machine sends a real /iclock/cdata or /iclock/getrequest heartbeat.`,
+        text: `Device SN ${regSn.trim()} registered as OFFLINE on backend. It will automatically switch to ONLINE when the physical machine sends a real heartbeat.`,
       });
       await loadAll();
     }
@@ -148,67 +160,106 @@ export const AdmsBackendPanel: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Backend Server Connection Bar */}
+      {/* Built-in Cloud Backend Status Bar (Developer Maintenance Only) */}
       <div className="bg-white rounded-2xl p-5 border border-[#DCE3E8] shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#E9ECEF]">
           <div>
             <h3 className="text-sm font-black text-[#252A30] flex items-center gap-2">
               <Server className="w-4 h-4 text-[#E5B82A]" />
-              <span>Connect to ADMS / iClock Backend Server</span>
+              <span>Built-In Biometric Cloud Server</span>
             </h3>
             <p className="text-xs text-[#84909A]">
-              Enter your deployed <code>adms-server</code> URL to list real devices, attendance punches, and raw incoming hardware packets.
+              Pre-configured inside the app (<code className="text-[#252A30]">{serverUrl}</code>) — clients never need to fill in or maintain server details.
             </p>
           </div>
-          <span
-            className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border self-start sm:self-auto ${
-              health?.ok
-                ? 'bg-[#36A875]/15 text-[#36A875] border-[#36A875]/30'
-                : 'bg-[#DC5555]/10 text-[#DC5555] border-[#DC5555]/30'
-            }`}
-          >
-            {health === null
-              ? 'Checking...'
-              : health.ok
-              ? `Connected (${(health.database || 'SQL').toUpperCase()})`
-              : 'Not Reachable'}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
-          <div className="md:col-span-6">
-            <label className="block font-bold text-[#252A30] mb-1">ADMS Backend Server URL</label>
-            <input
-              type="url"
-              placeholder="http://<YOUR_SERVER_IP>:8080"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] font-mono font-bold text-[#252A30] focus:outline-none focus:border-[#FFD447]"
-            />
-          </div>
-          <div className="md:col-span-4">
-            <label className="block font-bold text-[#252A30] mb-1">
-              API Token (Optional — if set in .env)
-            </label>
-            <input
-              type="password"
-              placeholder="API_AUTH_TOKEN"
-              value={apiToken}
-              onChange={(e) => setApiToken(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] font-mono text-[#252A30] focus:outline-none focus:border-[#FFD447]"
-            />
-          </div>
-          <div className="md:col-span-2 flex items-end">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
+                health?.ok
+                  ? 'bg-[#36A875]/15 text-[#36A875] border-[#36A875]/30'
+                  : 'bg-[#DC5555]/10 text-[#DC5555] border-[#DC5555]/30'
+              }`}
+            >
+              {health === null
+                ? 'Checking...'
+                : health.ok
+                ? `Cloud Server Online${health.database ? ` (${health.database.toUpperCase()})` : ''}`
+                : 'Server Offline'}
+            </span>
             <button
               onClick={() => loadAll()}
               disabled={loading}
-              className="w-full py-2 px-3 rounded-xl bg-[#252A30] text-[#FFD447] font-black text-xs flex items-center justify-center gap-1.5 hover:bg-[#313740] transition-all disabled:opacity-50"
+              className="py-1.5 px-3 rounded-xl bg-[#252A30] text-[#FFD447] font-black text-xs flex items-center gap-1.5 hover:bg-[#313740] transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? 'Loading...' : 'Connect & List'}</span>
+              <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowServerOverride((v) => !v)}
+              className="py-1.5 px-2.5 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] text-[#5A646E] hover:text-[#252A30] font-bold text-[11px] flex items-center gap-1"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              <span>{showServerOverride ? 'Hide Override' : 'Override URL'}</span>
             </button>
           </div>
         </div>
+
+        {/* One-time Installer Reference for Machine WebSocket URL */}
+        <div className="p-3.5 rounded-xl bg-[#252A30] text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[#FFD447]">
+              One-Time Hardware Installer Endpoint (WSS)
+            </p>
+            <p className="font-mono text-xs text-white/95 truncate mt-0.5">{derivedWssUrl}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyWss}
+            className="px-3 py-1.5 rounded-lg bg-[#FFD447] text-[#252A30] font-black text-xs flex items-center gap-1.5 shrink-0 hover:bg-[#F5C62F] transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            <span>{copiedWss ? 'Copied!' : 'Copy WSS URL'}</span>
+          </button>
+        </div>
+
+        {/* Optional Developer Override Fields (Collapsed by default) */}
+        {showServerOverride && (
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 text-xs pt-1">
+            <div className="md:col-span-6">
+              <label className="block font-bold text-[#252A30] mb-1">Override Backend URL (Temporary)</label>
+              <input
+                type="url"
+                placeholder="https://dream-gym-1.onrender.com"
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] font-mono font-bold text-[#252A30] focus:outline-none focus:border-[#FFD447]"
+              />
+            </div>
+            <div className="md:col-span-4">
+              <label className="block font-bold text-[#252A30] mb-1">
+                API Secret (Set via VITE_BIOMETRIC_API_SECRET)
+              </label>
+              <input
+                type="password"
+                placeholder="Configured via env var"
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-[#F5F6F2] border border-[#DCE3E8] font-mono text-[#252A30] focus:outline-none focus:border-[#FFD447]"
+              />
+            </div>
+            <div className="md:col-span-2 flex items-end">
+              <button
+                onClick={() => loadAll()}
+                disabled={loading}
+                className="w-full py-2 px-3 rounded-xl bg-[#252A30] text-[#FFD447] font-black text-xs flex items-center justify-center gap-1.5 hover:bg-[#313740] transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Apply</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/30 text-xs font-semibold text-[#DC5555] flex items-start gap-2">
